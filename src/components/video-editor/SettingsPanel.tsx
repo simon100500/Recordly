@@ -2902,14 +2902,6 @@ export function SettingsPanel({
 					formatValue={(value) => `${value}ms`}
 					parseInput={(text) => parseFloat(text.replace(/ms$/, ""))}
 				/>
-				<div className="flex items-center justify-between px-1">
-					<span className="text-xs text-muted-foreground">Collapse gaps</span>
-					<Switch
-						checked={silenceDetectionSettings.collapse}
-						onCheckedChange={(v) => updateSilenceDetectionSettings({ collapse: v })}
-						className="data-[state=checked]:bg-[#2563EB] scale-75"
-					/>
-				</div>
 				<div className="flex gap-2 pt-1">
 					<Button
 						type="button"

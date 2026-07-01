@@ -2934,19 +2934,6 @@ export default function VideoEditor() {
 		});
 	}
 
-	function restoreClipsData(clips: ClipRegion[]): ClipRegion[] {
-		return clips.map((clip) => {
-			if (clip.sourceStartMs === undefined) return clip;
-			const displayDuration = clip.endMs - clip.startMs;
-			return {
-				...clip,
-				startMs: clip.sourceStartMs,
-				endMs: clip.sourceStartMs + displayDuration,
-				sourceStartMs: undefined,
-			};
-		});
-	}
-
 	function collapseZoomsData(zooms: ZoomRegion[], clips: ClipRegion[]): ZoomRegion[] {
 		const shifts = getClipCollapseShifts(clips);
 		function collapseTime(t: number): number {
@@ -2990,30 +2977,19 @@ export default function VideoEditor() {
 			startMs: r.startMs,
 			endMs: r.endMs,
 			speed,
+			sourceStartMs: r.startMs,
 		}));
-			if (silenceDetectionSettings.collapse) {
-			newClips = collapseClipsData(newClips);
-			setZoomRegions(collapseZoomsData(zoomRegionsRef.current, newClips));
-		}
+		newClips = collapseClipsData(newClips);
+		setZoomRegions(collapseZoomsData(zoomRegionsRef.current, newClips));
 		setClipRegions(newClips);
 		toast.success(`Created ${newClips.length} clip regions from silence detection`);
 	}, [duration, silenceDetectionSettings]);
-
-	// Reactive collapse toggle
-	useEffect(() => {
-		if (silenceDetectionSettings.collapse) {
-			setClipRegions((prev) => collapseClipsData(prev));
-			setZoomRegions((prev) => collapseZoomsData(prev, clipRegionsRef.current));
-		} else {
-			setClipRegions((prev) => restoreClipsData(prev));
-		}
-	}, [silenceDetectionSettings.collapse]);
 
 	const handleResetClips = useCallback(() => {
 		const totalMs = Math.round(duration * 1000);
 		if (totalMs <= 0) return;
 		setClipRegions([
-			{ id: crypto.randomUUID(), startMs: 0, endMs: totalMs, speed: 1 },
+			{ id: crypto.randomUUID(), startMs: 0, endMs: totalMs, speed: 1, sourceStartMs: 0 },
 		]);
 		toast.success("Clips reset to full track");
 	}, [duration]);
@@ -3607,7 +3583,7 @@ export default function VideoEditor() {
 								const id = `clip-${nextClipIdRef.current++}`;
 								autoFullTrackClipIdRef.current = id;
 								autoFullTrackClipEndMsRef.current = totalMs;
-								return [{ id, startMs: 0, endMs: totalMs, speed: 1 }];
+								return [{ id, startMs: 0, endMs: totalMs, speed: 1, sourceStartMs: 0 }];
 							})();
 
 				if (trimRegions.length > 0) {
@@ -4042,12 +4018,14 @@ export default function VideoEditor() {
 				if (!target) return prev;
 				const leftId = `clip-${nextClipIdRef.current++}`;
 				const rightId = `clip-${nextClipIdRef.current++}`;
+				const srcStart = target.sourceStartMs ?? target.startMs;
 				const left: ClipRegion = {
 					id: leftId,
 					startMs: target.startMs,
 					endMs: Math.round(splitMs),
 					speed: target.speed,
 					muted: target.muted,
+					sourceStartMs: srcStart,
 				};
 				const right: ClipRegion = {
 					id: rightId,
@@ -4055,6 +4033,7 @@ export default function VideoEditor() {
 					endMs: target.endMs,
 					speed: target.speed,
 					muted: target.muted,
+					sourceStartMs: Math.round(srcStart + (splitMs - target.startMs) * target.speed),
 				};
 				if (selectedClipId === target.id) {
 					setSelectedClipId(leftId);
@@ -4068,43 +4047,44 @@ export default function VideoEditor() {
 	const handleClipSpanChange = useCallback(
 		(id: string, span: Span) => {
 			const oldClip = clipRegions.find((c) => c.id === id);
+			if (!oldClip) return;
 			const newStart = Math.round(span.start);
 			const newEnd = Math.round(span.end);
-			const removedSegments = oldClip
-				? [
-						...(newStart > oldClip.startMs
-							? [{ startMs: oldClip.startMs, endMs: newStart }]
-							: []),
-						...(newEnd < oldClip.endMs
-							? [{ startMs: newEnd, endMs: oldClip.endMs }]
-							: []),
-					]
-				: [];
+			const startDelta = newStart - oldClip.startMs;
+			const endDelta = newEnd - oldClip.endMs;
+			const isBodyDrag = Math.abs(startDelta - endDelta) < 1 && Math.abs(startDelta) > 0;
+			const isLeftEdge = startDelta !== 0 && endDelta === 0;
 
-			if (oldClip) {
-				const startDelta = newStart - oldClip.startMs;
-				const endDelta = newEnd - oldClip.endMs;
-				const isMove = Math.abs(startDelta - endDelta) < 1 && Math.abs(startDelta) > 0;
+			let newSourceStartMs = oldClip.sourceStartMs ?? oldClip.startMs;
 
-				if (isMove) {
-					const delta = startDelta;
-					setZoomRegions((prev) =>
-						prev.map((zoom) => {
-							const overlaps =
-								zoom.startMs < oldClip.endMs && zoom.endMs > oldClip.startMs;
-							if (overlaps) {
-								return {
-									...zoom,
-									startMs: zoom.startMs + delta,
-									endMs: zoom.endMs + delta,
-								};
-							}
-							return zoom;
-						}),
-					);
-				}
+			if (isLeftEdge) {
+				newSourceStartMs = Math.max(0, newSourceStartMs + startDelta);
+			} else if (isBodyDrag) {
+				const delta = startDelta;
+				setZoomRegions((prev) =>
+					prev.map((zoom) => {
+						const overlaps =
+							zoom.startMs < oldClip.endMs && zoom.endMs > oldClip.startMs;
+						if (overlaps) {
+							return {
+								...zoom,
+								startMs: zoom.startMs + delta,
+								endMs: zoom.endMs + delta,
+							};
+						}
+						return zoom;
+					}),
+				);
 			}
 
+			const removedSegments = [
+				...(newStart > oldClip.startMs
+					? [{ startMs: oldClip.startMs, endMs: newStart }]
+					: []),
+				...(newEnd < oldClip.endMs
+					? [{ startMs: newEnd, endMs: oldClip.endMs }]
+					: []),
+			];
 			if (removedSegments.length > 0) {
 				const removeTrimmedRegions = <T extends { startMs: number; endMs: number }>(
 					regions: T[],
@@ -4125,7 +4105,9 @@ export default function VideoEditor() {
 
 			setClipRegions((prev) =>
 				prev.map((clip) =>
-					clip.id === id ? { ...clip, startMs: newStart, endMs: newEnd } : clip,
+					clip.id === id
+						? { ...clip, startMs: newStart, endMs: newEnd, sourceStartMs: newSourceStartMs }
+						: clip,
 				),
 			);
 		},

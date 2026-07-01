@@ -529,6 +529,9 @@ export function normalizeProjectEditor(editor: Partial<ProjectEditorState>): Pro
 							typeof region.showSourceAudio === "boolean"
 								? region.showSourceAudio
 								: false,
+						sourceStartMs: isFiniteNumber(region.sourceStartMs)
+							? Math.max(0, Math.round(region.sourceStartMs))
+							: undefined,
 					};
 				})
 		: [];

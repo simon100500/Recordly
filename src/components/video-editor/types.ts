@@ -380,19 +380,19 @@ export function clipsToTrims(clips: ClipRegion[], totalDurationMs: number): Trim
 
 /** Convert legacy trim regions to clip regions (complement). */
 export function trimsToClips(trims: TrimRegion[], totalDurationMs: number): ClipRegion[] {
-	if (trims.length === 0) return [{ id: "clip-1", startMs: 0, endMs: totalDurationMs, speed: 1 }];
+	if (trims.length === 0) return [{ id: "clip-1", startMs: 0, endMs: totalDurationMs, speed: 1, sourceStartMs: 0 }];
 	const sorted = [...trims].sort((a, b) => a.startMs - b.startMs);
 	const clips: ClipRegion[] = [];
 	let cursor = 0;
 	let clipId = 1;
 	for (const trim of sorted) {
 		if (trim.startMs > cursor) {
-			clips.push({ id: `clip-${clipId++}`, startMs: cursor, endMs: trim.startMs, speed: 1 });
+			clips.push({ id: `clip-${clipId++}`, startMs: cursor, endMs: trim.startMs, speed: 1, sourceStartMs: cursor });
 		}
 		cursor = trim.endMs;
 	}
 	if (cursor < totalDurationMs) {
-		clips.push({ id: `clip-${clipId++}`, startMs: cursor, endMs: totalDurationMs, speed: 1 });
+		clips.push({ id: `clip-${clipId++}`, startMs: cursor, endMs: totalDurationMs, speed: 1, sourceStartMs: cursor });
 	}
 	return clips;
 }
