@@ -556,8 +556,6 @@ export default function VideoEditor() {
 		useState<SilenceDetectionSettings>(DEFAULT_SILENCE_DETECTION_SETTINGS);
 	const clipRegionsRef = useRef<ClipRegion[]>([]);
 	const zoomRegionsRef = useRef<ZoomRegion[]>([]);
-	const originalClipPositionsRef = useRef<{ startMs: number; endMs: number }[] | null>(null);
-	const originalZoomPositionsRef = useRef<ZoomRegion[] | null>(null);
 	const [includeCaptionSidecar, setIncludeCaptionSidecar] = useState(false);
 	const [whisperExecutablePath, setWhisperExecutablePath] = useState<string | null>(
 		initialEditorPreferences.whisperExecutablePath,
@@ -2889,24 +2887,49 @@ export default function VideoEditor() {
 		setAutoCaptionSettings((prev) => ({ ...prev, enabled: false }));
 	}, []);
 
-	function collapseClipsData(
+	function getClipCollapseShifts(
 		clips: ClipRegion[],
-		originals: { startMs: number; endMs: number }[],
-	): ClipRegion[] {
-		const sorted = [...originals].sort((a, b) => a.startMs - b.startMs);
-		let shift = 0;
+	): { srcStart: number; shift: number; srcEnd: number }[] {
+		const sorted = [...clips].sort(
+			(a, b) => (a.sourceStartMs ?? a.startMs) - (b.sourceStartMs ?? b.startMs),
+		);
+		const result: { srcStart: number; shift: number; srcEnd: number }[] = [];
+		let accShift = 0;
 		let prevEnd = 0;
-		return clips.map((clip, i) => {
-			const orig = sorted[i];
-			if (!orig) return clip;
-			const gap = orig.startMs - prevEnd;
-			shift += gap;
-			prevEnd = orig.endMs;
+		for (const c of sorted) {
+			const srcStart = c.sourceStartMs ?? c.startMs;
+			const gap = srcStart - prevEnd;
+			accShift += gap;
+			const displayDuration = c.endMs - c.startMs;
+			const srcEnd = srcStart + displayDuration;
+			result.push({ srcStart, shift: accShift, srcEnd });
+			prevEnd = srcEnd;
+		}
+		return result;
+	}
+
+	function shiftAtTime(
+		timeMs: number,
+		shifts: { srcStart: number; shift: number; srcEnd: number }[],
+	): number {
+		let s = 0;
+		for (const sh of shifts) {
+			if (timeMs >= sh.srcStart) s = sh.shift;
+		}
+		return s;
+	}
+
+	function collapseClipsData(clips: ClipRegion[]): ClipRegion[] {
+		const shifts = getClipCollapseShifts(clips);
+		return clips.map((clip) => {
+			const srcStart = clip.sourceStartMs ?? clip.startMs;
+			const displayDuration = clip.endMs - clip.startMs;
+			const sh = shiftAtTime(srcStart, shifts);
 			return {
 				...clip,
-				startMs: Math.max(0, orig.startMs - shift),
-				endMs: Math.max(0, orig.endMs - shift),
-				sourceStartMs: orig.startMs,
+				startMs: Math.max(0, srcStart - sh),
+				endMs: Math.max(0, srcStart - sh + displayDuration),
+				sourceStartMs: srcStart,
 			};
 		});
 	}
@@ -2924,31 +2947,15 @@ export default function VideoEditor() {
 		});
 	}
 
-	function collapseZoomsData(
-		zooms: ZoomRegion[],
-		originals: { startMs: number; endMs: number }[],
-	): ZoomRegion[] {
-		const sorted = [...originals].sort((a, b) => a.startMs - b.startMs);
-		const gaps: { beforeMs: number; shift: number }[] = [];
-		let accShift = 0;
-		let prevEnd = 0;
-		for (const c of sorted) {
-			const gap = c.startMs - prevEnd;
-			accShift += gap;
-			gaps.push({ beforeMs: c.startMs, shift: accShift });
-			prevEnd = c.endMs;
-		}
-		function shiftTime(t: number): number {
-			let s = 0;
-			for (const g of gaps) {
-				if (t >= g.beforeMs) s = g.shift;
-			}
-			return Math.max(0, t - s);
+	function collapseZoomsData(zooms: ZoomRegion[], clips: ClipRegion[]): ZoomRegion[] {
+		const shifts = getClipCollapseShifts(clips);
+		function collapseTime(t: number): number {
+			return Math.max(0, t - shiftAtTime(t, shifts));
 		}
 		return zooms.map((z) => ({
 			...z,
-			startMs: shiftTime(z.startMs),
-			endMs: shiftTime(z.endMs),
+			startMs: collapseTime(z.startMs),
+			endMs: collapseTime(z.endMs),
 		}));
 	}
 
@@ -2984,11 +2991,9 @@ export default function VideoEditor() {
 			endMs: r.endMs,
 			speed,
 		}));
-		originalClipPositionsRef.current = rawRegions;
-		if (silenceDetectionSettings.collapse) {
-			originalZoomPositionsRef.current = cloneStructured(zoomRegionsRef.current);
-			newClips = collapseClipsData(newClips, rawRegions);
-			setZoomRegions(collapseZoomsData(zoomRegionsRef.current, rawRegions));
+			if (silenceDetectionSettings.collapse) {
+			newClips = collapseClipsData(newClips);
+			setZoomRegions(collapseZoomsData(zoomRegionsRef.current, newClips));
 		}
 		setClipRegions(newClips);
 		toast.success(`Created ${newClips.length} clip regions from silence detection`);
@@ -2996,16 +3001,11 @@ export default function VideoEditor() {
 
 	// Reactive collapse toggle
 	useEffect(() => {
-		if (!originalClipPositionsRef.current) return;
 		if (silenceDetectionSettings.collapse) {
-			originalZoomPositionsRef.current = cloneStructured(zoomRegionsRef.current);
-			setClipRegions((prev) => collapseClipsData(prev, originalClipPositionsRef.current!));
-			setZoomRegions(collapseZoomsData(zoomRegionsRef.current, originalClipPositionsRef.current));
+			setClipRegions((prev) => collapseClipsData(prev));
+			setZoomRegions((prev) => collapseZoomsData(prev, clipRegionsRef.current));
 		} else {
 			setClipRegions((prev) => restoreClipsData(prev));
-			if (originalZoomPositionsRef.current) {
-				setZoomRegions(originalZoomPositionsRef.current);
-			}
 		}
 	}, [silenceDetectionSettings.collapse]);
 
@@ -3015,8 +3015,6 @@ export default function VideoEditor() {
 		setClipRegions([
 			{ id: crypto.randomUUID(), startMs: 0, endMs: totalMs, speed: 1 },
 		]);
-		originalClipPositionsRef.current = null;
-		originalZoomPositionsRef.current = null;
 		toast.success("Clips reset to full track");
 	}, [duration]);
 
