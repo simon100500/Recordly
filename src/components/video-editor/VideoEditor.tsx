@@ -554,6 +554,8 @@ export default function VideoEditor() {
 	);
 	const [silenceDetectionSettings, setSilenceDetectionSettings] =
 		useState<SilenceDetectionSettings>(DEFAULT_SILENCE_DETECTION_SETTINGS);
+	const originalClipPositionsRef = useRef<{ startMs: number; endMs: number }[] | null>(null);
+	const originalZoomPositionsRef = useRef<ZoomRegion[] | null>(null);
 	const [includeCaptionSidecar, setIncludeCaptionSidecar] = useState(false);
 	const [whisperExecutablePath, setWhisperExecutablePath] = useState<string | null>(
 		initialEditorPreferences.whisperExecutablePath,
@@ -2883,6 +2885,62 @@ export default function VideoEditor() {
 		setAutoCaptionSettings((prev) => ({ ...prev, enabled: false }));
 	}, []);
 
+	function collapseClips(
+		clips: { startMs: number; endMs: number }[],
+	): { startMs: number; endMs: number }[] {
+		const sorted = [...clips].sort((a, b) => a.startMs - b.startMs);
+		let shift = 0;
+		let prevEnd = 0;
+		const result: { startMs: number; endMs: number }[] = [];
+		for (const r of sorted) {
+			shift += r.startMs - prevEnd;
+			result.push({
+				startMs: Math.max(0, r.startMs - shift),
+				endMs: Math.max(0, r.endMs - shift),
+			});
+			prevEnd = r.endMs;
+		}
+		const firstStart = result[0].startMs;
+		if (firstStart > 0) {
+			for (const r of result) {
+				r.startMs -= firstStart;
+				r.endMs -= firstStart;
+			}
+		}
+		return result;
+	}
+
+	function shiftZoomsForCollapsed(
+		zooms: ZoomRegion[],
+		clips: { startMs: number; endMs: number }[],
+	): ZoomRegion[] {
+		// Build a gap map: for any source time T, shift = total gap before T
+		const sorted = [...clips].sort((a, b) => a.startMs - b.startMs);
+		const gaps: { beforeMs: number; shift: number }[] = [];
+		let accShift = 0;
+		let prevEnd = 0;
+		for (const c of sorted) {
+			const gap = c.startMs - prevEnd;
+			accShift += gap;
+			gaps.push({ beforeMs: c.startMs, shift: accShift });
+			prevEnd = c.endMs;
+		}
+
+		function shiftTime(t: number): number {
+			let s = 0;
+			for (const g of gaps) {
+				if (t >= g.beforeMs) s = g.shift;
+			}
+			return Math.max(0, t - s);
+		}
+
+		return zooms.map((z) => ({
+			...z,
+			startMs: shiftTime(z.startMs),
+			endMs: shiftTime(z.endMs),
+		}));
+	}
+
 	const handleRemoveSilence = useCallback(() => {
 		const audioData = timelineRef.current?.getSourceAudioPeaks();
 		if (!audioData || !audioData.peaks || duration <= 0) {
@@ -2902,42 +2960,59 @@ export default function VideoEditor() {
 			return;
 		}
 		const pad = silenceDetectionSettings.paddingMs;
-		let paddedRegions = regions.map((r) => ({
+		const rawRegions = regions.map((r) => ({
 			startMs: Math.max(0, Math.round(r.startMs - pad)),
 			endMs: Math.min(totalMs, Math.round(r.endMs + pad)),
 		}));
-		if (silenceDetectionSettings.collapse) {
-			paddedRegions.sort((a, b) => a.startMs - b.startMs);
-			let shift = 0;
-			let prevEnd = 0;
-			const collapsed: typeof paddedRegions = [];
-			for (const r of paddedRegions) {
-				shift += r.startMs - prevEnd;
-				collapsed.push({
-					startMs: Math.max(0, r.startMs - shift),
-					endMs: Math.max(0, r.endMs - shift),
-				});
-				prevEnd = r.endMs;
-			}
-			paddedRegions = collapsed;
-			const firstStart = paddedRegions[0].startMs;
-			if (firstStart !== 0) {
-				const offset = firstStart;
-				for (const r of paddedRegions) {
-					r.startMs -= offset;
-					r.endMs -= offset;
-				}
-			}
-		}
-		const newClips: ClipRegion[] = paddedRegions.map((r) => ({
+		const finalRegions = silenceDetectionSettings.collapse
+			? collapseClips(rawRegions)
+			: rawRegions;
+		const newClips: ClipRegion[] = finalRegions.map((r) => ({
 			id: crypto.randomUUID(),
 			startMs: r.startMs,
 			endMs: r.endMs,
 			speed: 1,
 		}));
+		originalClipPositionsRef.current = rawRegions;
 		setClipRegions(newClips);
+		if (silenceDetectionSettings.collapse) {
+			setZoomRegions((prev) => shiftZoomsForCollapsed(prev, rawRegions));
+		}
 		toast.success(`Created ${newClips.length} clip regions from silence detection`);
 	}, [duration, silenceDetectionSettings]);
+
+	// Reactive collapse toggle
+	useEffect(() => {
+		if (!originalClipPositionsRef.current) return;
+		if (silenceDetectionSettings.collapse) {
+			const collapsed = collapseClips(
+				originalClipPositionsRef.current.map((r) => ({
+					startMs: r.startMs,
+					endMs: r.endMs,
+				})),
+			);
+			setClipRegions((prev) =>
+				prev.map((clip, i) => {
+					const c = collapsed[i];
+					return c ? { ...clip, startMs: c.startMs, endMs: c.endMs } : clip;
+				}),
+			);
+			setZoomRegions((prev) =>
+				shiftZoomsForCollapsed(prev, originalClipPositionsRef.current!),
+			);
+		} else {
+			// Restore from originals
+			setClipRegions((prev) =>
+				prev.map((clip, i) => {
+					const orig = originalClipPositionsRef.current?.[i];
+					return orig ? { ...clip, startMs: orig.startMs, endMs: orig.endMs } : clip;
+				}),
+			);
+			if (originalZoomPositionsRef.current) {
+				setZoomRegions(originalZoomPositionsRef.current);
+			}
+		}
+	}, [silenceDetectionSettings.collapse]);
 
 	const handleResetClips = useCallback(() => {
 		const totalMs = Math.round(duration * 1000);
