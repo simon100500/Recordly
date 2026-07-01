@@ -626,6 +626,7 @@ export interface SilenceDetectionSettings {
 	minSilenceMs: number;
 	minRegionMs: number;
 	paddingMs: number;
+	collapse: boolean;
 }
 
 export const DEFAULT_SILENCE_DETECTION_SETTINGS: SilenceDetectionSettings = {
@@ -633,6 +634,7 @@ export const DEFAULT_SILENCE_DETECTION_SETTINGS: SilenceDetectionSettings = {
 	minSilenceMs: 500,
 	minRegionMs: 200,
 	paddingMs: 100,
+	collapse: true,
 };
 
 export function getSilenceDetectionSettings(

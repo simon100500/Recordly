@@ -2902,10 +2902,37 @@ export default function VideoEditor() {
 			return;
 		}
 		const pad = silenceDetectionSettings.paddingMs;
-		const newClips: ClipRegion[] = regions.map((r) => ({
-			id: crypto.randomUUID(),
+		let paddedRegions = regions.map((r) => ({
 			startMs: Math.max(0, Math.round(r.startMs - pad)),
 			endMs: Math.min(totalMs, Math.round(r.endMs + pad)),
+		}));
+		if (silenceDetectionSettings.collapse) {
+			paddedRegions.sort((a, b) => a.startMs - b.startMs);
+			let shift = 0;
+			let prevEnd = 0;
+			const collapsed: typeof paddedRegions = [];
+			for (const r of paddedRegions) {
+				shift += r.startMs - prevEnd;
+				collapsed.push({
+					startMs: Math.max(0, r.startMs - shift),
+					endMs: Math.max(0, r.endMs - shift),
+				});
+				prevEnd = r.endMs;
+			}
+			paddedRegions = collapsed;
+			const firstStart = paddedRegions[0].startMs;
+			if (firstStart !== 0) {
+				const offset = firstStart;
+				for (const r of paddedRegions) {
+					r.startMs -= offset;
+					r.endMs -= offset;
+				}
+			}
+		}
+		const newClips: ClipRegion[] = paddedRegions.map((r) => ({
+			id: crypto.randomUUID(),
+			startMs: r.startMs,
+			endMs: r.endMs,
 			speed: 1,
 		}));
 		setClipRegions(newClips);
