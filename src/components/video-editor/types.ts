@@ -111,6 +111,7 @@ export type EditorEffectSection =
 	| "extensions"
 	| "clip"
 	| "audio"
+	| "silence"
 	| `ext:${string}`;
 
 export type ZoomTransitionEasing = "recordly" | "glide" | "smooth" | "snappy" | "linear";
@@ -624,12 +625,14 @@ export interface SilenceDetectionSettings {
 	sensitivity: number;
 	minSilenceMs: number;
 	minRegionMs: number;
+	paddingMs: number;
 }
 
 export const DEFAULT_SILENCE_DETECTION_SETTINGS: SilenceDetectionSettings = {
 	sensitivity: 0.035,
 	minSilenceMs: 500,
 	minRegionMs: 200,
+	paddingMs: 100,
 };
 
 export function getSilenceDetectionSettings(

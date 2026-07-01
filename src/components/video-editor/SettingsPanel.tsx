@@ -65,6 +65,7 @@ import type {
 	EditorEffectSection,
 	FigureData,
 	Padding,
+	SilenceDetectionSettings,
 	WebcamOverlaySettings,
 	WebcamPositionPreset,
 	ZoomDepth,
@@ -72,6 +73,7 @@ import type {
 	ZoomMotionBlurTuning,
 	ZoomTransitionEasing,
 } from "./types";
+import { DEFAULT_SILENCE_DETECTION_SETTINGS } from "./types";
 import {
 	ADVANCED_VERTICAL_PADDING_MAX,
 	DEFAULT_AUTO_CAPTION_SETTINGS,
@@ -803,12 +805,15 @@ interface SettingsPanelProps {
 	onAnnotationDelete?: (id: string) => void;
 	autoCaptions?: CaptionCue[];
 	autoCaptionSettings?: AutoCaptionSettings;
+	silenceDetectionSettings?: SilenceDetectionSettings;
 	whisperExecutablePath?: string | null;
 	whisperModelPath?: string | null;
 	whisperModelDownloadStatus?: "idle" | "downloading" | "downloaded" | "error";
 	whisperModelDownloadProgress?: number;
 	isGeneratingCaptions?: boolean;
 	onAutoCaptionSettingsChange?: (settings: AutoCaptionSettings) => void;
+	onSilenceDetectionSettingsChange?: (settings: SilenceDetectionSettings) => void;
+	onRemoveSilence?: () => void;
 	onPickWhisperExecutable?: () => void;
 	onPickWhisperModel?: () => void;
 	onGenerateAutoCaptions?: () => void;
@@ -1240,11 +1245,14 @@ export function SettingsPanel({
 	onAnnotationDelete,
 	autoCaptions = [],
 	autoCaptionSettings = DEFAULT_AUTO_CAPTION_SETTINGS,
+	silenceDetectionSettings = DEFAULT_SILENCE_DETECTION_SETTINGS,
 	whisperModelPath,
 	whisperModelDownloadStatus = "idle",
 	whisperModelDownloadProgress = 0,
 	isGeneratingCaptions = false,
 	onAutoCaptionSettingsChange,
+	onSilenceDetectionSettingsChange,
+	onRemoveSilence,
 	onPickWhisperModel,
 	onGenerateAutoCaptions,
 	onClearAutoCaptions,
@@ -1287,6 +1295,12 @@ export function SettingsPanel({
 	const updateAutoCaptionSettings = (partial: Partial<AutoCaptionSettings>) => {
 		onAutoCaptionSettingsChange?.({
 			...autoCaptionSettings,
+			...partial,
+		});
+	};
+	const updateSilenceDetectionSettings = (partial: Partial<SilenceDetectionSettings>) => {
+		onSilenceDetectionSettingsChange?.({
+			...silenceDetectionSettings,
 			...partial,
 		});
 	};
@@ -2827,6 +2841,66 @@ export function SettingsPanel({
 		</section>
 	);
 
+	const silenceSectionContent = (
+		<section className="flex flex-col gap-2">
+			<div className="flex items-center justify-between gap-3">
+				<div className="flex items-center gap-3">
+					<SectionLabel>Silence Removal</SectionLabel>
+					<button
+						type="button"
+						onClick={() => onSilenceDetectionSettingsChange?.(DEFAULT_SILENCE_DETECTION_SETTINGS)}
+						className="text-[10px] text-[#2563EB] transition-opacity hover:opacity-80"
+					>
+						{t("common.actions.reset", "Reset")}
+					</button>
+				</div>
+			</div>
+			<div className="rounded-lg bg-foreground/[0.03] px-2.5 py-2 space-y-3">
+				<SliderControl
+					min={0}
+					max={0.1}
+					step={0.001}
+					label="Sensitivity"
+					value={silenceDetectionSettings.sensitivity}
+					defaultValue={DEFAULT_SILENCE_DETECTION_SETTINGS.sensitivity}
+					onChange={(value) => updateSilenceDetectionSettings({ sensitivity: value })}
+					formatValue={(value) => `${Math.round(value * 1000)}`}
+					parseInput={(text) => parseFloat(text) / 1000}
+				/>
+				<SliderControl
+					min={50}
+					max={2000}
+					step={50}
+					label="Min Silence (ms)"
+					value={silenceDetectionSettings.minSilenceMs}
+					defaultValue={DEFAULT_SILENCE_DETECTION_SETTINGS.minSilenceMs}
+					onChange={(value) => updateSilenceDetectionSettings({ minSilenceMs: value })}
+					formatValue={(value) => `${value}ms`}
+					parseInput={(text) => parseFloat(text.replace(/ms$/, ""))}
+				/>
+				<SliderControl
+					min={50}
+					max={2000}
+					step={50}
+					label="Min Region (ms)"
+					value={silenceDetectionSettings.minRegionMs}
+					defaultValue={DEFAULT_SILENCE_DETECTION_SETTINGS.minRegionMs}
+					onChange={(value) => updateSilenceDetectionSettings({ minRegionMs: value })}
+					formatValue={(value) => `${value}ms`}
+					parseInput={(text) => parseFloat(text.replace(/ms$/, ""))}
+				/>
+				<Button
+					type="button"
+					variant="outline"
+					className="gap-2 text-xs h-8"
+					onClick={onRemoveSilence}
+				>
+					Remove Silence
+				</Button>
+			</div>
+		</section>
+	);
+
 	const effectSectionContent = (() => {
 		const settingsSectionContent = (
 			<div className="space-y-4">
@@ -3567,6 +3641,8 @@ export function SettingsPanel({
 				return sceneSectionContent;
 			case "captions":
 				return captionsSectionContent;
+			case "silence":
+				return silenceSectionContent;
 			case "cursor":
 				return (
 					<section className="flex flex-col gap-2">

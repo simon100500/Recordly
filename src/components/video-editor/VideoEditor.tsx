@@ -119,6 +119,7 @@ import { extensionHost } from "@/lib/extensions";
 import { useVideoEditorAudio } from "./audio/useVideoEditorAudio";
 import { resolveAutoCaptionSourcePath } from "./autoCaptionSource";
 import { type CaptionEditTarget, updateCaptionCuesForEditedTarget } from "./captionEditing";
+import { detectSilence, invertSilence } from "./silenceDetection";
 import { CropControl } from "./CropControl";
 import { ExportSettingsMenu } from "./ExportSettingsMenu";
 import ExtensionManager from "./ExtensionManager";
@@ -190,6 +191,7 @@ import {
 	DEFAULT_CROP_REGION,
 	DEFAULT_CURSOR_STYLE,
 	DEFAULT_FIGURE_DATA,
+	DEFAULT_SILENCE_DETECTION_SETTINGS,
 	DEFAULT_WEBCAM_OVERLAY,
 	DEFAULT_WEBCAM_TIME_OFFSET_MS,
 	DEFAULT_ZOOM_IN_DURATION_MS,
@@ -204,6 +206,7 @@ import {
 	getClipSourceEndMs,
 	getTimelineDurationMs,
 	type Padding,
+	type SilenceDetectionSettings,
 	mapSourceTimeToTimelineTime as resolveSourceTimeToTimelineTime,
 	mapTimelineTimeToSourceTime as resolveTimelineTimeToSourceTime,
 	type SpeedRegion,
@@ -549,6 +552,8 @@ export default function VideoEditor() {
 	const [autoCaptionSettings, setAutoCaptionSettings] = useState<AutoCaptionSettings>(
 		DEFAULT_AUTO_CAPTION_SETTINGS,
 	);
+	const [silenceDetectionSettings, setSilenceDetectionSettings] =
+		useState<SilenceDetectionSettings>(DEFAULT_SILENCE_DETECTION_SETTINGS);
 	const [includeCaptionSidecar, setIncludeCaptionSidecar] = useState(false);
 	const [whisperExecutablePath, setWhisperExecutablePath] = useState<string | null>(
 		initialEditorPreferences.whisperExecutablePath,
@@ -1627,6 +1632,12 @@ export default function VideoEditor() {
 				id: "captions" as const,
 				label: t("settings.sections.captions", "Captions"),
 				icon: PhCaptions,
+			},
+			{
+				id: "silence" as const,
+				label: "Silence",
+				icon: VolumeX,
+				extensionPath: undefined,
 			},
 			{
 				id: "settings" as const,
@@ -2871,6 +2882,34 @@ export default function VideoEditor() {
 		setAutoCaptions([]);
 		setAutoCaptionSettings((prev) => ({ ...prev, enabled: false }));
 	}, []);
+
+	const handleRemoveSilence = useCallback(() => {
+		const audioData = timelineRef.current?.getSourceAudioPeaks();
+		if (!audioData || !audioData.peaks || duration <= 0) {
+			toast.error("No audio peaks available for silence detection");
+			return;
+		}
+		const totalMs = Math.round(duration * 1000);
+		const silent = detectSilence(
+			audioData.peaks,
+			totalMs,
+			silenceDetectionSettings.sensitivity,
+			silenceDetectionSettings.minSilenceMs,
+		);
+		const regions = invertSilence(silent, totalMs, silenceDetectionSettings.minRegionMs);
+		if (regions.length === 0) {
+			toast.info("No silence found with current settings");
+			return;
+		}
+		const newClips: ClipRegion[] = regions.map((r) => ({
+			id: crypto.randomUUID(),
+			startMs: Math.round(r.startMs),
+			endMs: Math.round(r.endMs),
+			speed: 1,
+		}));
+		setClipRegions(newClips);
+		toast.success(`Created ${newClips.length} clip regions from silence detection`);
+	}, [duration, silenceDetectionSettings]);
 
 	const handleSaveAutoCaptionEdit = useCallback(
 		(target: CaptionEditTarget, text: string) => {
@@ -6369,7 +6408,10 @@ export default function VideoEditor() {
 								whisperModelDownloadStatus={whisperModelDownloadStatus}
 								whisperModelDownloadProgress={whisperModelDownloadProgress}
 								isGeneratingCaptions={isGeneratingCaptions}
+								silenceDetectionSettings={silenceDetectionSettings}
 								onAutoCaptionSettingsChange={setAutoCaptionSettings}
+								onSilenceDetectionSettingsChange={setSilenceDetectionSettings}
+								onRemoveSilence={handleRemoveSilence}
 								onPickWhisperExecutable={handlePickWhisperExecutable}
 								onPickWhisperModel={handlePickWhisperModel}
 								onGenerateAutoCaptions={handleGenerateAutoCaptions}

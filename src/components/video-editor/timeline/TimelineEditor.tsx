@@ -22,6 +22,7 @@ import KeyframeMarkers from "./components/markers/KeyframeMarkers";
 import TimelineCanvas from "./components/viewport/TimelineCanvas";
 import TimelineWrapper from "./components/wrapper/TimelineWrapper";
 import { calculateTimelineScale } from "./core/time";
+import type { AudioPeaksData } from "./core/timelineTypes";
 import { useTimelineAudioPeaks } from "./hooks/useTimelineAudioPeaks";
 import { useTimelineEditorRuntime } from "./hooks/useTimelineEditorRuntime";
 import { useTimelineRange } from "./hooks/useTimelineRange";
@@ -99,6 +100,7 @@ export interface TimelineEditorHandle {
 	splitClip: () => void;
 	addAnnotation: (trackIndex?: number) => void;
 	addAudio: (trackIndex?: number) => Promise<void>;
+	getSourceAudioPeaks: () => AudioPeaksData | null;
 	keyframes: { id: string; time: number }[];
 }
 
@@ -227,7 +229,7 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
 			return { previewSpans, hiddenZoomIds };
 		}, [clipRegions, liveSpanPreviewById, zoomRegions]);
 		const { shortcuts: keyShortcuts, isMac } = useShortcuts();
-		const { peaks: sourceAudioPeaks, loading: sourceAudioLoading } =
+		const { peaks: rawSourceAudioPeaks, loading: sourceAudioLoading } =
 			useTimelineAudioPeaks(videoPath);
 		const localSourcePath = useMemo(() => {
 			if (!videoPath) return null;
@@ -263,7 +265,7 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
 		const sourceAudioTracks = useMemo(
 			() =>
 				buildTimelineSourceAudioTracks({
-					sourceAudioPeaks,
+					sourceAudioPeaks: rawSourceAudioPeaks,
 					micSidecarPeaks,
 					systemSidecarPeaks,
 					labels: {
@@ -272,9 +274,10 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
 						mixed: t("audio.mixedLabel", "Source"),
 					},
 				}),
-			[micSidecarPeaks, sourceAudioPeaks, systemSidecarPeaks, t],
+			[micSidecarPeaks, rawSourceAudioPeaks, systemSidecarPeaks, t],
 		);
 
+		const sourceAudioPeaks = sourceAudioTracks[0]?.peaks ?? null;
 		const isLoading = useMemo(() => {
 			// If we are still actively trying to load audio peaks (main or sidecars)
 			if (videoPath && (sourceAudioLoading || micSidecarLoading || systemSidecarLoading))
@@ -332,6 +335,7 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
 			autoSuggestZoomsTrigger,
 			onAutoSuggestZoomsConsumed,
 			disableSuggestedZooms,
+			sourceAudioPeaks,
 			zoomRegions,
 			onZoomAdded,
 			onZoomSuggested,
