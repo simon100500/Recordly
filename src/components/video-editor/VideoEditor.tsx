@@ -2901,15 +2901,25 @@ export default function VideoEditor() {
 			toast.info("No silence found with current settings");
 			return;
 		}
+		const pad = silenceDetectionSettings.paddingMs;
 		const newClips: ClipRegion[] = regions.map((r) => ({
 			id: crypto.randomUUID(),
-			startMs: Math.round(r.startMs),
-			endMs: Math.round(r.endMs),
+			startMs: Math.max(0, Math.round(r.startMs - pad)),
+			endMs: Math.min(totalMs, Math.round(r.endMs + pad)),
 			speed: 1,
 		}));
 		setClipRegions(newClips);
 		toast.success(`Created ${newClips.length} clip regions from silence detection`);
 	}, [duration, silenceDetectionSettings]);
+
+	const handleResetClips = useCallback(() => {
+		const totalMs = Math.round(duration * 1000);
+		if (totalMs <= 0) return;
+		setClipRegions([
+			{ id: crypto.randomUUID(), startMs: 0, endMs: totalMs, speed: 1 },
+		]);
+		toast.success("Clips reset to full track");
+	}, [duration]);
 
 	const handleSaveAutoCaptionEdit = useCallback(
 		(target: CaptionEditTarget, text: string) => {
@@ -6412,6 +6422,7 @@ export default function VideoEditor() {
 								onAutoCaptionSettingsChange={setAutoCaptionSettings}
 								onSilenceDetectionSettingsChange={setSilenceDetectionSettings}
 								onRemoveSilence={handleRemoveSilence}
+								onResetClips={handleResetClips}
 								onPickWhisperExecutable={handlePickWhisperExecutable}
 								onPickWhisperModel={handlePickWhisperModel}
 								onGenerateAutoCaptions={handleGenerateAutoCaptions}

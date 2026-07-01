@@ -814,6 +814,7 @@ interface SettingsPanelProps {
 	onAutoCaptionSettingsChange?: (settings: AutoCaptionSettings) => void;
 	onSilenceDetectionSettingsChange?: (settings: SilenceDetectionSettings) => void;
 	onRemoveSilence?: () => void;
+	onResetClips?: () => void;
 	onPickWhisperExecutable?: () => void;
 	onPickWhisperModel?: () => void;
 	onGenerateAutoCaptions?: () => void;
@@ -1253,6 +1254,7 @@ export function SettingsPanel({
 	onAutoCaptionSettingsChange,
 	onSilenceDetectionSettingsChange,
 	onRemoveSilence,
+	onResetClips,
 	onPickWhisperModel,
 	onGenerateAutoCaptions,
 	onClearAutoCaptions,
@@ -2889,14 +2891,35 @@ export function SettingsPanel({
 					formatValue={(value) => `${value}ms`}
 					parseInput={(text) => parseFloat(text.replace(/ms$/, ""))}
 				/>
-				<Button
-					type="button"
-					variant="outline"
-					className="gap-2 text-xs h-8"
-					onClick={onRemoveSilence}
-				>
-					Remove Silence
-				</Button>
+				<SliderControl
+					min={0}
+					max={500}
+					step={10}
+					label="Padding (ms)"
+					value={silenceDetectionSettings.paddingMs}
+					defaultValue={DEFAULT_SILENCE_DETECTION_SETTINGS.paddingMs}
+					onChange={(value) => updateSilenceDetectionSettings({ paddingMs: value })}
+					formatValue={(value) => `${value}ms`}
+					parseInput={(text) => parseFloat(text.replace(/ms$/, ""))}
+				/>
+				<div className="flex gap-2 pt-1">
+					<Button
+						type="button"
+						variant="outline"
+						className="flex-1 gap-2 text-xs h-8"
+						onClick={onRemoveSilence}
+					>
+						Remove Silence
+					</Button>
+					<Button
+						type="button"
+						variant="outline"
+						className="flex-1 gap-2 text-xs h-8 border-red-500/20 text-red-400 hover:bg-red-500/10"
+						onClick={onResetClips}
+					>
+						Reset Clips
+					</Button>
+				</div>
 			</div>
 		</section>
 	);
