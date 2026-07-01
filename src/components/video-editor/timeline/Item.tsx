@@ -125,7 +125,7 @@ export default function Item({
 	const isClip = variant === "clip";
 	const isSpeed = variant === "speed";
 	const isAudio = variant === "audio";
-	const showAudioWaveform = isAudio && Boolean(waveformPeaks);
+	const showAudioWaveform = (isAudio || isClip) && Boolean(waveformPeaks);
 	const clipSpeedLabel = isClip ? formatClipSpeedLabel(speedValue ?? 1) : null;
 
 	const glassClass = isZoom
@@ -204,7 +204,7 @@ export default function Item({
 							segmentEndMs={waveformSegmentSpan?.end ?? span.end}
 							gain={waveformGain}
 							normalize={waveformNormalize}
-							className="absolute inset-0 w-full h-full pointer-events-none opacity-45"
+							className="absolute inset-0 w-full h-full pointer-events-none opacity-70"
 						/>
 					)}
 					{/* Muted overlay for source audio track items */}

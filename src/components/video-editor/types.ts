@@ -620,6 +620,27 @@ export function clampFocusToDepth(focus: ZoomFocus, _depth: ZoomDepth): ZoomFocu
 	};
 }
 
+export interface SilenceDetectionSettings {
+	sensitivity: number;
+	minSilenceMs: number;
+	minRegionMs: number;
+}
+
+export const DEFAULT_SILENCE_DETECTION_SETTINGS: SilenceDetectionSettings = {
+	sensitivity: 0.035,
+	minSilenceMs: 500,
+	minRegionMs: 200,
+};
+
+export function getSilenceDetectionSettings(
+	overrides?: Partial<SilenceDetectionSettings>,
+): SilenceDetectionSettings {
+	return {
+		...DEFAULT_SILENCE_DETECTION_SETTINGS,
+		...overrides,
+	};
+}
+
 function clamp(value: number, min: number, max: number) {
 	if (Number.isNaN(value)) return (min + max) / 2;
 	return Math.min(max, Math.max(min, value));

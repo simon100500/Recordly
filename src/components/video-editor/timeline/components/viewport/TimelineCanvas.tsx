@@ -384,6 +384,8 @@ const TimelineCanvasRows = memo(function TimelineCanvasRows({
 						onSelectId={onSelectClip}
 						variant="clip"
 						speedValue={item.speedValue}
+						waveformPeaks={sourceAudioTracks[0]?.peaks ?? null}
+						waveformSegmentSpan={item.sourceSpan ?? item.span}
 					>
 						{item.label}
 					</Item>

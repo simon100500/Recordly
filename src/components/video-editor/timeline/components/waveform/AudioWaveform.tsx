@@ -107,7 +107,7 @@ function AudioWaveformComponent({
 				ctx.lineTo(px, midY + barHeight);
 			}
 
-			ctx.strokeStyle = "rgba(255, 255, 255, 0.55)";
+			ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
 			ctx.lineWidth = dpr;
 			ctx.stroke();
 		};
