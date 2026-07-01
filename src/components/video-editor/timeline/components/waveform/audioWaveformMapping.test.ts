@@ -28,4 +28,18 @@ describe("resolveWaveformSourceTimeMs", () => {
 			}),
 		).toBe(3_000);
 	});
+
+	it("keeps the right side anchored when the left trim hides source audio", () => {
+		const afterLeftTrim = {
+			segmentStartMs: 4_700,
+			segmentEndMs: 7_200,
+			displayStartMs: 4_400,
+			displayEndMs: 6_900,
+			pixelsPerDisplayMs: 0.1,
+		};
+
+		expect(resolveWaveformSourceTimeMs({ ...afterLeftTrim, cssX: 0 })).toBe(4_700);
+		expect(resolveWaveformSourceTimeMs({ ...afterLeftTrim, cssX: 100 })).toBe(5_700);
+		expect(resolveWaveformSourceTimeMs({ ...afterLeftTrim, cssX: 250 })).toBe(7_200);
+	});
 });

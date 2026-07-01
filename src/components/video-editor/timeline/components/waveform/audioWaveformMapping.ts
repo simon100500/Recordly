@@ -19,5 +19,6 @@ export function resolveWaveformSourceTimeMs({
 	const displayDurationMs = Math.max(1, displayEndMs - displayStartMs);
 	const speed = sourceDurationMs > 0 ? sourceDurationMs / displayDurationMs : 1;
 	const sourceMsPerCssPx = speed / Math.max(pixelsPerDisplayMs, Number.EPSILON);
-	return segmentStartMs + cssX * sourceMsPerCssPx;
+	const displayWidthCssPx = displayDurationMs * pixelsPerDisplayMs;
+	return segmentEndMs - (displayWidthCssPx - cssX) * sourceMsPerCssPx;
 }
