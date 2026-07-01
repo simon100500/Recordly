@@ -3,7 +3,6 @@ import {
 	Gauge,
 	ChatCircle as MessageSquare,
 	MusicNotes as Music,
-	MouseLeftClickIcon as PhMouseLeftClick,
 	Scissors,
 	SpeakerX,
 	MagnifyingGlassPlus as ZoomIn,
@@ -69,7 +68,6 @@ export default function Item({
 	onSelect,
 	onSelectId,
 	zoomDepth = 1,
-	zoomMode = "auto",
 	speedValue,
 	waveformPeaks = null,
 	waveformSegmentSpan,
@@ -202,6 +200,8 @@ export default function Item({
 							peaks={waveformPeaks}
 							segmentStartMs={waveformSegmentSpan?.start ?? span.start}
 							segmentEndMs={waveformSegmentSpan?.end ?? span.end}
+							displayStartMs={span.start}
+							displayEndMs={span.end}
 							gain={waveformGain}
 							normalize={waveformNormalize}
 							className="absolute inset-0 w-full h-full pointer-events-none opacity-70"

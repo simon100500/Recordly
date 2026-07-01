@@ -1,11 +1,14 @@
 import { useTimelineContext } from "dnd-timeline";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import type { AudioPeaksData } from "../../core/timelineTypes";
+import { resolveWaveformSourceTimeMs } from "./audioWaveformMapping";
 
 interface AudioWaveformProps {
 	peaks: AudioPeaksData;
 	segmentStartMs?: number;
 	segmentEndMs?: number;
+	displayStartMs?: number;
+	displayEndMs?: number;
 	gain?: number;
 	normalize?: boolean;
 	className?: string;
@@ -20,12 +23,14 @@ function AudioWaveformComponent({
 	peaks,
 	segmentStartMs,
 	segmentEndMs,
+	displayStartMs,
+	displayEndMs,
 	gain = 1,
 	normalize = false,
 	className,
 }: AudioWaveformProps) {
 	const canvasRef = useRef<HTMLCanvasElement>(null);
-	const { range } = useTimelineContext();
+	const { range, valueToPixels } = useTimelineContext();
 	const [resizeKey, setResizeKey] = useState(0);
 	const lastDrawAtRef = useRef(0);
 
@@ -47,6 +52,7 @@ function AudioWaveformComponent({
 	useEffect(() => {
 		const canvas = canvasRef.current;
 		if (!canvas) return;
+		void resizeKey;
 		let rafId = 0;
 
 		const draw = () => {
@@ -62,7 +68,8 @@ function AudioWaveformComponent({
 
 			const rect = canvas.getBoundingClientRect();
 			const dpr = window.devicePixelRatio || 1;
-			const width = Math.round(rect.width * dpr);
+			const cssWidth = rect.width;
+			const width = Math.round(cssWidth * dpr);
 			const height = Math.round(rect.height * dpr);
 
 			if (width === 0 || height === 0) return;
@@ -79,15 +86,26 @@ function AudioWaveformComponent({
 			const visibleStartMs = segmentStartMs ?? range.start;
 			const visibleEndMs = segmentEndMs ?? range.end;
 			const visibleDurationMs = visibleEndMs - visibleStartMs;
-			
+			const displayStart = displayStartMs ?? visibleStartMs;
+			const displayEnd = displayEndMs ?? visibleEndMs;
+			const pixelsPerDisplayMs = valueToPixels(1000) / 1000;
+
 			if (visibleDurationMs <= 0) return;
 
 			const midY = height / 2;
 			ctx.beginPath();
-			
+
 			for (let px = 0; px < width; px++) {
-				const t = visibleStartMs + (px / width) * visibleDurationMs;
-				
+				const cssX = px / dpr;
+				const t = resolveWaveformSourceTimeMs({
+					cssX,
+					segmentStartMs: visibleStartMs,
+					segmentEndMs: visibleEndMs,
+					displayStartMs: displayStart,
+					displayEndMs: displayEnd,
+					pixelsPerDisplayMs,
+				});
+
 				// If the timeline time is beyond the actual audio duration, we draw nothing (flat line)
 				if (t < 0 || t > durationMs) continue;
 
@@ -95,12 +113,12 @@ function AudioWaveformComponent({
 				const leftIndex = Math.floor(exactIndex);
 				const rightIndex = Math.min(peakData.length - 1, leftIndex + 1);
 				const mix = exactIndex - leftIndex;
-				
+
 				let amplitude = peakData[leftIndex] * (1 - mix) + peakData[rightIndex] * mix;
-				
+
 				if (normalize) amplitude = Math.sqrt(Math.max(0, amplitude));
 				amplitude = Math.max(0, Math.min(1, amplitude * gain));
-				
+
 				const barHeight = amplitude * midY * 0.85;
 
 				ctx.moveTo(px, midY - barHeight);
@@ -113,7 +131,19 @@ function AudioWaveformComponent({
 		};
 		rafId = requestAnimationFrame(draw);
 		return () => cancelAnimationFrame(rafId);
-	}, [gain, normalize, peaks, range.start, range.end, resizeKey, segmentStartMs, segmentEndMs]);
+	}, [
+		displayEndMs,
+		displayStartMs,
+		gain,
+		normalize,
+		peaks,
+		range.start,
+		range.end,
+		resizeKey,
+		segmentStartMs,
+		segmentEndMs,
+		valueToPixels,
+	]);
 
 	return (
 		<canvas

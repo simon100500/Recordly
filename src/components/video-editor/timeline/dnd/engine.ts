@@ -243,6 +243,12 @@ export function clampDraggedSpanToNeighbours(
 				minItemDurationMs,
 			});
 		}
+
+		const previousSibling = [...siblings]
+			.reverse()
+			.find((region) => region.end <= activeItem.start);
+		const start = previousSibling ? previousSibling.end : 0;
+		return clampSpanToBounds({ start, end: start + duration }, { totalMs, minItemDurationMs });
 	}
 
 	const effectiveTotalMs = getClipDragTotalMs(activeItem, rowId, proposedSpan, totalMs);
@@ -279,6 +285,11 @@ export function resolveResizeEnd(
 		totalMs > 0 ? Math.min(minItemDurationMs, totalMs) : minItemDurationMs;
 	if (clamped.end - clamped.start < effectiveMinDuration) {
 		return null;
+	}
+
+	const activeItem = allRegionSpans.find((region) => region.id === activeItemId);
+	if (activeItem?.rowId === CLIP_ROW_ID) {
+		return clamped;
 	}
 
 	if (hasOverlap(clamped, activeItemId)) {
@@ -319,6 +330,13 @@ export function resolveDragEnd(
 	const effectiveTotalMs = getClipDragTotalMs(activeItem, resolvedRowId, dragSpan, totalMs);
 
 	let clamped = clampSpanToBounds(dragSpan, { totalMs: effectiveTotalMs, minItemDurationMs });
+	if (activeItem?.rowId === CLIP_ROW_ID && resolvedRowId === CLIP_ROW_ID) {
+		clamped = clampDraggedSpanToNeighbours(clamped, activeItemId, resolvedRowId, {
+			allRegionSpans,
+			minItemDurationMs,
+			totalMs: effectiveTotalMs,
+		});
+	}
 	if (hasOverlap(clamped, activeItemId, resolvedRowId)) {
 		clamped = clampDraggedSpanToNeighbours(clamped, activeItemId, resolvedRowId, {
 			allRegionSpans,
