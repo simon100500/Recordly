@@ -26,6 +26,7 @@ interface UseTimelineDndBindingsParams {
 	onAnnotationSpanChange?: (id: string, span: Span, trackIndex?: number) => void;
 	onSpeedSpanChange?: (id: string, span: Span) => void;
 	onAudioSpanChange?: (id: string, span: Span, trackIndex?: number) => void;
+	collapseClips?: boolean;
 }
 
 type TimelineItemKind = "zoom" | "trim" | "clip" | "annotation" | "speed" | "audio" | null;
@@ -43,6 +44,7 @@ export function useTimelineDndBindings({
 	onAnnotationSpanChange,
 	onSpeedSpanChange,
 	onAudioSpanChange,
+	collapseClips,
 }: UseTimelineDndBindingsParams) {
 	const resolveItemKind = useCallback(
 		(id: string): TimelineItemKind => {
@@ -118,8 +120,9 @@ export function useTimelineDndBindings({
 				clipRegions,
 				annotationRegions,
 				audioRegions,
+				collapse: collapseClips,
 			}),
-		[zoomRegions, clipRegions, annotationRegions, audioRegions],
+		[zoomRegions, clipRegions, annotationRegions, audioRegions, collapseClips],
 	);
 
 	const allRegionSpans = useMemo(
@@ -128,8 +131,9 @@ export function useTimelineDndBindings({
 				zoomRegions,
 				clipRegions,
 				audioRegions,
+				collapse: collapseClips,
 			}),
-		[zoomRegions, clipRegions, audioRegions],
+		[zoomRegions, clipRegions, audioRegions, collapseClips],
 	);
 
 	const getResolvedDropRowId = useCallback(

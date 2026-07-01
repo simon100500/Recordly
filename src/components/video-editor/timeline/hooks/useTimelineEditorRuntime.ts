@@ -63,6 +63,7 @@ interface UseTimelineEditorRuntimeParams {
 	isMac: boolean;
 	keyShortcuts: TimelineShortcutBindings;
 	isTimelineFocusedRef: RefObject<boolean>;
+	collapseClips?: boolean;
 }
 
 export function useTimelineEditorRuntime({
@@ -108,6 +109,7 @@ export function useTimelineEditorRuntime({
 	isMac,
 	keyShortcuts,
 	isTimelineFocusedRef,
+	collapseClips,
 }: UseTimelineEditorRuntimeParams) {
 	const {
 		keyframes,
@@ -183,6 +185,7 @@ export function useTimelineEditorRuntime({
 		onAnnotationSpanChange,
 		onSpeedSpanChange,
 		onAudioSpanChange,
+		collapseClips,
 	});
 
 	const {
