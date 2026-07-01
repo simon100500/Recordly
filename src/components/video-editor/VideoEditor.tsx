@@ -85,6 +85,11 @@ import {
 	getAspectRatioLabel,
 	getAspectRatioValue,
 } from "@/utils/aspectRatioUtils";
+import {
+	type RemovedTimelineSegment,
+	resolveClipSpanChange,
+	resolveRippleClipDelete,
+} from "./clipSpanChange";
 import { planClipSpeedChange } from "./clipSpeedChange";
 import { ExtensionIcon } from "./ExtensionIcon";
 import { calculateMp4ExportDimensions, calculateMp4SourceDimensions } from "./exportDimensions";
@@ -4046,21 +4051,12 @@ export default function VideoEditor() {
 
 	const handleClipSpanChange = useCallback(
 		(id: string, span: Span) => {
-			const oldClip = clipRegions.find((c) => c.id === id);
-			if (!oldClip) return;
-			const newStart = Math.round(span.start);
-			const newEnd = Math.round(span.end);
-			const startDelta = newStart - oldClip.startMs;
-			const endDelta = newEnd - oldClip.endMs;
-			const isBodyDrag = Math.abs(startDelta - endDelta) < 1 && Math.abs(startDelta) > 0;
-			const isLeftEdge = startDelta !== 0 && endDelta === 0;
+			const oldClip = clipRegions.find((clip) => clip.id === id);
+			const resolved = resolveClipSpanChange({ clipRegions, id, span });
+			if (!oldClip || !resolved) return;
 
-			let newSourceStartMs = oldClip.sourceStartMs ?? oldClip.startMs;
-
-			if (isLeftEdge) {
-				newSourceStartMs = Math.max(0, newSourceStartMs + startDelta);
-			} else if (isBodyDrag) {
-				const delta = startDelta;
+			if (resolved.movementDeltaMs !== null) {
+				const delta = resolved.movementDeltaMs;
 				setZoomRegions((prev) =>
 					prev.map((zoom) => {
 						const overlaps =
@@ -4077,14 +4073,7 @@ export default function VideoEditor() {
 				);
 			}
 
-			const removedSegments = [
-				...(newStart > oldClip.startMs
-					? [{ startMs: oldClip.startMs, endMs: newStart }]
-					: []),
-				...(newEnd < oldClip.endMs
-					? [{ startMs: newEnd, endMs: oldClip.endMs }]
-					: []),
-			];
+			const { removedSegments } = resolved;
 			if (removedSegments.length > 0) {
 				const removeTrimmedRegions = <T extends { startMs: number; endMs: number }>(
 					regions: T[],
@@ -4103,13 +4092,7 @@ export default function VideoEditor() {
 				setAudioRegions((prev) => removeTrimmedRegions(prev));
 			}
 
-			setClipRegions((prev) =>
-				prev.map((clip) =>
-					clip.id === id
-						? { ...clip, startMs: newStart, endMs: newEnd, sourceStartMs: newSourceStartMs }
-						: clip,
-				),
-			);
+			setClipRegions((prev) => prev.map((clip) => (clip.id === id ? resolved.clip : clip)));
 		},
 		[clipRegions],
 	);
@@ -4173,23 +4156,43 @@ export default function VideoEditor() {
 
 	const handleClipDelete = useCallback(
 		(id: string) => {
-			const deletedClip = clipRegions.find((clip) => clip.id === id);
-			setClipRegions((prev) => prev.filter((clip) => clip.id !== id));
-			if (deletedClip) {
-				const { startMs, endMs } = deletedClip;
-				setZoomRegions((prev) =>
-					prev.filter((region) => region.endMs <= startMs || region.startMs >= endMs),
-				);
-				setAnnotationRegions((prev) =>
-					prev.filter((region) => region.endMs <= startMs || region.startMs >= endMs),
-				);
-				setSpeedRegions((prev) =>
-					prev.filter((region) => region.endMs <= startMs || region.startMs >= endMs),
-				);
-				setAudioRegions((prev) =>
-					prev.filter((region) => region.endMs <= startMs || region.startMs >= endMs),
-				);
-			}
+			const rippleDelete = resolveRippleClipDelete(clipRegions, id);
+			if (!rippleDelete) return;
+
+			const shiftRegionsAfterDeletedSpan = <T extends { startMs: number; endMs: number }>(
+				regions: T[],
+				deletedSpan: RemovedTimelineSegment,
+				shiftMs: number,
+			): T[] =>
+				regions
+					.filter(
+						(region) =>
+							region.endMs <= deletedSpan.startMs ||
+							region.startMs >= deletedSpan.endMs,
+					)
+					.map((region) =>
+						region.startMs >= deletedSpan.endMs
+							? {
+									...region,
+									startMs: region.startMs - shiftMs,
+									endMs: region.endMs - shiftMs,
+								}
+							: region,
+					);
+
+			setClipRegions(rippleDelete.clipRegions);
+			setZoomRegions((prev) =>
+				shiftRegionsAfterDeletedSpan(prev, rippleDelete.deletedSpan, rippleDelete.shiftMs),
+			);
+			setAnnotationRegions((prev) =>
+				shiftRegionsAfterDeletedSpan(prev, rippleDelete.deletedSpan, rippleDelete.shiftMs),
+			);
+			setSpeedRegions((prev) =>
+				shiftRegionsAfterDeletedSpan(prev, rippleDelete.deletedSpan, rippleDelete.shiftMs),
+			);
+			setAudioRegions((prev) =>
+				shiftRegionsAfterDeletedSpan(prev, rippleDelete.deletedSpan, rippleDelete.shiftMs),
+			);
 			if (selectedClipId === id) {
 				setSelectedClipId(null);
 			}
