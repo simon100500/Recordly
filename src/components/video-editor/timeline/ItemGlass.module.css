@@ -1,18 +1,17 @@
 .glassGreen {
 	position: relative;
 	border-radius: 6px;
-	background: #0d1f3e;
+	background: #183065;
 	border: none;
-	transition:
-		background 0.15s ease;
+	transition: background 0.15s ease;
 }
 
 .glassGreen:hover {
-	background: #11284f;
+	background: #1e3d7a;
 }
 
 .glassGreen.selected {
-	background: #153062;
+	background: #23468a;
 	box-shadow: inset 0 0 0 1.5px #2563eb;
 	z-index: 10;
 }
@@ -20,18 +19,17 @@
 .glassRed {
 	position: relative;
 	border-radius: 6px;
-	background: #3a1213;
+	background: #652425;
 	border: none;
-	transition:
-		background 0.15s ease;
+	transition: background 0.15s ease;
 }
 
 .glassRed:hover {
-	background: #4e1718;
+	background: #7b292a;
 }
 
 .glassRed.selected {
-	background: #5c1c1d;
+	background: #8b2d2d;
 	box-shadow: inset 0 0 0 1.5px #ef4444;
 	z-index: 10;
 }
@@ -39,18 +37,17 @@
 .glassYellow {
 	position: relative;
 	border-radius: 6px;
-	background: #2e2912;
+	background: #4e4726;
 	border: none;
-	transition:
-		background 0.15s ease;
+	transition: background 0.15s ease;
 }
 
 .glassYellow:hover {
-	background: #3f3718;
+	background: #5f552b;
 }
 
 .glassYellow.selected {
-	background: #4d431c;
+	background: #6a5f2f;
 	box-shadow: inset 0 0 0 1.5px #b4a046;
 	z-index: 10;
 }
@@ -58,18 +55,17 @@
 .glassAmber {
 	position: relative;
 	border-radius: 6px;
-	background: #3e2806;
+	background: #67460f;
 	border: none;
-	transition:
-		background 0.15s ease;
+	transition: background 0.15s ease;
 }
 
 .glassAmber:hover {
-	background: #523508;
+	background: #7e540f;
 }
 
 .glassAmber.selected {
-	background: #5f3d09;
+	background: #8e5e0e;
 	box-shadow: inset 0 0 0 1.5px #f59e0b;
 	z-index: 10;
 }
@@ -77,18 +73,17 @@
 .glassPurple {
 	position: relative;
 	border-radius: 6px;
-	background: #2c153e;
+	background: #4a2a69;
 	border: none;
-	transition:
-		background 0.15s ease;
+	transition: background 0.15s ease;
 }
 
 .glassPurple:hover {
-	background: #3b1d54;
+	background: #593180;
 }
 
 .glassPurple.selected {
-	background: #462263;
+	background: #643690;
 	box-shadow: inset 0 0 0 1.5px #a855f7;
 	z-index: 10;
 }
@@ -96,18 +91,17 @@
 .glassCyan {
 	position: relative;
 	border-radius: 6px;
-	background: #07142e;
+	background: #0d1f4a;
 	border: none;
-	transition:
-		background 0.15s ease;
+	transition: background 0.15s ease;
 }
 
 .glassCyan:hover {
-	background: #0b1a3f;
+	background: #10285e;
 }
 
 .glassCyan.selected {
-	background: #0e214e;
+	background: #143072;
 	box-shadow: inset 0 0 0 1.5px #2563eb;
 	z-index: 10;
 }
@@ -115,23 +109,107 @@
 .glassDarkGreen {
 	position: relative;
 	border-radius: 6px;
-	background: #0b2b17;
+	background: #164f2d;
 	border: none;
-	transition:
-		background 0.15s ease;
+	transition: background 0.15s ease;
 }
 
 .glassDarkGreen:hover {
-	background: #0e371d;
+	background: #186234;
 }
 
 .glassDarkGreen.selected {
-	background: #114123;
+	background: #196e3a;
 	box-shadow: inset 0 0 0 1.5px #22c55e;
 	z-index: 10;
 }
 
-/* Pill resize handle — visible on hover */
+/* --- Light-mode overrides --- */
+:global(:root:not(.dark)) .glassGreen {
+	background: #93a8c5;
+	border: none;
+}
+:global(:root:not(.dark)) .glassGreen:hover {
+	background: #7e97b8;
+}
+:global(:root:not(.dark)) .glassGreen.selected {
+	background: #2563eb;
+	box-shadow: inset 0 0 0 1.5px #fff;
+}
+
+:global(:root:not(.dark)) .glassRed {
+	background: #c08383;
+	border: none;
+}
+:global(:root:not(.dark)) .glassRed:hover {
+	background: #b06c6c;
+}
+:global(:root:not(.dark)) .glassRed.selected {
+	background: #ef4444;
+	box-shadow: inset 0 0 0 1.5px #fff;
+}
+
+:global(:root:not(.dark)) .glassYellow {
+	background: #bdaf7a;
+	border: none;
+}
+:global(:root:not(.dark)) .glassYellow:hover {
+	background: #ae9f65;
+}
+:global(:root:not(.dark)) .glassYellow.selected {
+	background: #b4a046;
+	box-shadow: inset 0 0 0 1.5px #fff;
+}
+
+:global(:root:not(.dark)) .glassAmber {
+	background: #c89f59;
+	border: none;
+}
+:global(:root:not(.dark)) .glassAmber:hover {
+	background: #b88e47;
+}
+:global(:root:not(.dark)) .glassAmber.selected {
+	background: #f59e0b;
+	box-shadow: inset 0 0 0 1.5px #fff;
+}
+
+:global(:root:not(.dark)) .glassPurple {
+	background: #a882c7;
+	border: none;
+}
+:global(:root:not(.dark)) .glassPurple:hover {
+	background: #966dba;
+}
+:global(:root:not(.dark)) .glassPurple.selected {
+	background: #a855f7;
+	box-shadow: inset 0 0 0 1.5px #fff;
+}
+
+:global(:root:not(.dark)) .glassCyan {
+	background: #7ba3cf;
+	border: none;
+}
+:global(:root:not(.dark)) .glassCyan:hover {
+	background: #6491c4;
+}
+:global(:root:not(.dark)) .glassCyan.selected {
+	background: #2563eb;
+	box-shadow: inset 0 0 0 1.5px #fff;
+}
+
+:global(:root:not(.dark)) .glassDarkGreen {
+	background: #6caa81;
+	border: none;
+}
+:global(:root:not(.dark)) .glassDarkGreen:hover {
+	background: #569871;
+}
+:global(:root:not(.dark)) .glassDarkGreen.selected {
+	background: #22c55e;
+	box-shadow: inset 0 0 0 1.5px #fff;
+}
+
+/* Resize handle */
 .zoomEndCap {
 	position: absolute;
 	top: 50%;
@@ -152,96 +230,11 @@
 		background 0.15s ease;
 }
 
-/* --- Light-mode overrides --- */
-:global(:root:not(.dark)) .glassGreen {
-	background: #dbeafe;
-	border: 1px solid #bfdbfe;
-}
-:global(:root:not(.dark)) .glassGreen:hover {
-	background: #bfdbfe;
-}
-:global(:root:not(.dark)) .glassGreen.selected {
-	background: #93c5fd;
-	box-shadow: inset 0 0 0 1.5px #2563eb;
-}
-
-:global(:root:not(.dark)) .glassRed {
-	background: #fee2e2;
-	border: 1px solid #fecaca;
-}
-:global(:root:not(.dark)) .glassRed:hover {
-	background: #fecaca;
-}
-:global(:root:not(.dark)) .glassRed.selected {
-	background: #fca5a5;
-	box-shadow: inset 0 0 0 1.5px #ef4444;
-}
-
-:global(:root:not(.dark)) .glassYellow {
-	background: #fef9c3;
-	border: 1px solid #fef08a;
-}
-:global(:root:not(.dark)) .glassYellow:hover {
-	background: #fef08a;
-}
-:global(:root:not(.dark)) .glassYellow.selected {
-	background: #fde047;
-	box-shadow: inset 0 0 0 1.5px #b4a046;
-}
-
-:global(:root:not(.dark)) .glassAmber {
-	background: #fef3c7;
-	border: 1px solid #fde68a;
-}
-:global(:root:not(.dark)) .glassAmber:hover {
-	background: #fde68a;
-}
-:global(:root:not(.dark)) .glassAmber.selected {
-	background: #fcd34d;
-	box-shadow: inset 0 0 0 1.5px #f59e0b;
-}
-
-:global(:root:not(.dark)) .glassPurple {
-	background: #f3e8ff;
-	border: 1px solid #e9d5ff;
-}
-:global(:root:not(.dark)) .glassPurple:hover {
-	background: #e9d5ff;
-}
-:global(:root:not(.dark)) .glassPurple.selected {
-	background: #d8b4fe;
-	box-shadow: inset 0 0 0 1.5px #a855f7;
-}
-
-:global(:root:not(.dark)) .glassCyan {
-	background: #dbeafe;
-	border: 1px solid #bfdbfe;
-}
-:global(:root:not(.dark)) .glassCyan:hover {
-	background: #bfdbfe;
-}
-:global(:root:not(.dark)) .glassCyan.selected {
-	background: #93c5fd;
-	box-shadow: inset 0 0 0 1.5px #2563eb;
-}
-
-:global(:root:not(.dark)) .glassDarkGreen {
-	background: #dcfce7;
-	border: 1px solid #bbf7d0;
-}
-:global(:root:not(.dark)) .glassDarkGreen:hover {
-	background: #bbf7d0;
-}
-:global(:root:not(.dark)) .glassDarkGreen.selected {
-	background: #86efac;
-	box-shadow: inset 0 0 0 1.5px #22c55e;
-}
-
 :global(:root:not(.dark)) .zoomEndCap {
-	background: rgba(0, 0, 0, 0.5);
+	background: rgba(0, 0, 0, 0.4);
 }
 :global(:root:not(.dark)) .zoomEndCap:hover {
-	background: rgba(0, 0, 0, 0.7);
+	background: rgba(0, 0, 0, 0.65);
 }
 
 .zoomEndCap:hover {
@@ -268,7 +261,6 @@
 	cursor: col-resize;
 }
 
-/* Grip lines removed */
 .zoomEndCap::before,
 .zoomEndCap::after {
 	content: none;

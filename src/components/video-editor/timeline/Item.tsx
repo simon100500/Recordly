@@ -160,18 +160,8 @@ export default function Item({
 			{...attributes}
 			data-timeline-item="true"
 			onPointerDownCapture={handleSelect}
-			className="group h-full relative"
+			className="group h-full"
 		>
-			{showAudioWaveform && waveformPeaks && (
-				<AudioWaveform
-					peaks={waveformPeaks}
-					segmentStartMs={waveformSegmentSpan?.start ?? span.start}
-					segmentEndMs={waveformSegmentSpan?.end ?? span.end}
-					gain={waveformGain}
-					normalize={waveformNormalize}
-					className="absolute inset-0 w-full h-full pointer-events-none opacity-70"
-				/>
-			)}
 			<div
 				className="h-full"
 				style={{
@@ -207,6 +197,16 @@ export default function Item({
 						style={{ cursor: "col-resize", pointerEvents: "auto" }}
 						title="Resize right"
 					/>
+					{showAudioWaveform && waveformPeaks && (
+						<AudioWaveform
+							peaks={waveformPeaks}
+							segmentStartMs={waveformSegmentSpan?.start ?? span.start}
+							segmentEndMs={waveformSegmentSpan?.end ?? span.end}
+							gain={waveformGain}
+							normalize={waveformNormalize}
+							className="absolute inset-0 w-full h-full pointer-events-none opacity-70"
+						/>
+					)}
 					{/* Muted overlay for source audio track items */}
 					{isAudio && muted && (
 						<div className="absolute inset-0 z-20 flex items-center justify-center gap-1 bg-red-900/40 pointer-events-none">
