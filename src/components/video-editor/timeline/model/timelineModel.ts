@@ -31,76 +31,34 @@ export function getAudioLabel(region: AudioRegion): string {
 	return region.audioPath.split(/[\\/]/).pop()?.replace(/\.[^.]+$/, "") || "Audio";
 }
 
-function collapseShiftAt(
-	timeMs: number,
-	sortedClips: { startMs: number; endMs: number }[],
-): number {
-	let shift = 0;
-	let prevEnd = 0;
-	for (const c of sortedClips) {
-		const gap = c.startMs - prevEnd;
-		if (timeMs < c.startMs) return shift;
-		shift += gap;
-		if (timeMs <= c.endMs) return shift;
-		prevEnd = c.endMs;
-	}
-	return shift;
-}
-
 export function buildTimelineItems(params: {
 	zoomRegions: ZoomRegion[];
 	clipRegions: ClipRegion[];
 	annotationRegions: AnnotationRegion[];
 	audioRegions: AudioRegion[];
-	collapse?: boolean;
 }): TimelineRenderItem[] {
-	const { zoomRegions, clipRegions, annotationRegions, audioRegions, collapse } = params;
-
-	const sortedClips = collapse
-		? [...clipRegions].sort((a, b) => a.startMs - b.startMs)
-		: null;
-
-	function collapseMs(ms: number): number {
-		if (!sortedClips) return ms;
-		return ms - collapseShiftAt(ms, sortedClips);
-	}
-
-	const zooms: TimelineRenderItem[] = zoomRegions.map((region, index) => {
-		const span = collapse
-			? {
-					start: collapseMs(region.startMs),
-					end: collapseMs(region.endMs),
-				}
-			: { start: region.startMs, end: region.endMs };
-		return {
-			id: region.id,
-			rowId: ZOOM_ROW_ID,
-			span,
-			label: `Zoom ${index + 1}`,
-			zoomDepth: region.depth,
-			zoomMode: region.mode ?? "auto",
-			variant: "zoom",
-		};
-	});
+	const { zoomRegions, clipRegions, annotationRegions, audioRegions } = params;
+	const zooms: TimelineRenderItem[] = zoomRegions.map((region, index) => ({
+		id: region.id,
+		rowId: ZOOM_ROW_ID,
+		span: { start: region.startMs, end: region.endMs },
+		label: `Zoom ${index + 1}`,
+		zoomDepth: region.depth,
+		zoomMode: region.mode ?? "auto",
+		variant: "zoom",
+	}));
 
 	const clips: TimelineRenderItem[] = clipRegions.map((region, index) => {
 		const displayDurationMs = Math.max(0, region.endMs - region.startMs);
 		const speed = Number.isFinite(region.speed) && region.speed > 0 ? region.speed : 1;
-		const sourceEndMs = region.startMs + displayDurationMs * speed;
+		const sourceEndMs = (region.sourceStartMs ?? region.startMs) + displayDurationMs * speed;
 		const speedLabel = formatClipSpeedLabel(speed);
-
-		const span = collapse
-			? {
-					start: collapseMs(region.startMs),
-					end: collapseMs(region.endMs),
-				}
-			: { start: region.startMs, end: region.endMs };
 
 		return {
 			id: region.id,
 			rowId: CLIP_ROW_ID,
-			span,
-			sourceSpan: { start: region.startMs, end: sourceEndMs },
+			span: { start: region.startMs, end: region.endMs },
+			sourceSpan: { start: region.sourceStartMs ?? region.startMs, end: sourceEndMs },
 			label: speedLabel ? `Clip ${index + 1} ${speedLabel}` : `Clip ${index + 1}`,
 			speedValue: speedLabel ? speed : undefined,
 			showSourceAudio: region.showSourceAudio,
@@ -135,29 +93,19 @@ export function buildAllRegionSpans(params: {
 	zoomRegions: ZoomRegion[];
 	clipRegions: ClipRegion[];
 	audioRegions: AudioRegion[];
-	collapse?: boolean;
 }): TimelineRegionSpan[] {
-	const { zoomRegions, clipRegions, audioRegions, collapse } = params;
-
-	const sortedClips = collapse
-		? [...clipRegions].sort((a, b) => a.startMs - b.startMs)
-		: null;
-
-	function collapseMs(ms: number): number {
-		if (!sortedClips) return ms;
-		return ms - collapseShiftAt(ms, sortedClips);
-	}
+	const { zoomRegions, clipRegions, audioRegions } = params;
 
 	const zooms = zoomRegions.map((r) => ({
 		id: r.id,
-		start: collapse ? collapseMs(r.startMs) : r.startMs,
-		end: collapse ? collapseMs(r.endMs) : r.endMs,
+		start: r.startMs,
+		end: r.endMs,
 		rowId: ZOOM_ROW_ID,
 	}));
 	const clips = clipRegions.map((r) => ({
 		id: r.id,
-		start: collapse ? collapseMs(r.startMs) : r.startMs,
-		end: collapse ? collapseMs(r.endMs) : r.endMs,
+		start: r.startMs,
+		end: r.endMs,
 		rowId: CLIP_ROW_ID,
 	}));
 	const audios = audioRegions.map((r) => ({
