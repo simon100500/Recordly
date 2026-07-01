@@ -160,8 +160,18 @@ export default function Item({
 			{...attributes}
 			data-timeline-item="true"
 			onPointerDownCapture={handleSelect}
-			className="group h-full"
+			className="group h-full relative"
 		>
+			{showAudioWaveform && waveformPeaks && (
+				<AudioWaveform
+					peaks={waveformPeaks}
+					segmentStartMs={waveformSegmentSpan?.start ?? span.start}
+					segmentEndMs={waveformSegmentSpan?.end ?? span.end}
+					gain={waveformGain}
+					normalize={waveformNormalize}
+					className="absolute inset-0 w-full h-full pointer-events-none opacity-70"
+				/>
+			)}
 			<div
 				className="h-full"
 				style={{
@@ -197,16 +207,6 @@ export default function Item({
 						style={{ cursor: "col-resize", pointerEvents: "auto" }}
 						title="Resize right"
 					/>
-					{showAudioWaveform && waveformPeaks && (
-						<AudioWaveform
-							peaks={waveformPeaks}
-							segmentStartMs={waveformSegmentSpan?.start ?? span.start}
-							segmentEndMs={waveformSegmentSpan?.end ?? span.end}
-							gain={waveformGain}
-							normalize={waveformNormalize}
-							className="absolute inset-0 w-full h-full pointer-events-none opacity-70"
-						/>
-					)}
 					{/* Muted overlay for source audio track items */}
 					{isAudio && muted && (
 						<div className="absolute inset-0 z-20 flex items-center justify-center gap-1 bg-red-900/40 pointer-events-none">
@@ -227,17 +227,17 @@ export default function Item({
 								<>
 									<Scissors className="w-3.5 h-3.5 shrink-0" />
 									<span className="text-[11px] font-semibold tracking-tight whitespace-nowrap">
-										Trim
+										{timeLabel}
 									</span>
 								</>
 							) : isClip ? (
 								<>
 									<Film className="w-3.5 h-3.5 shrink-0" />
 									<span className="text-[11px] font-semibold tracking-tight whitespace-nowrap">
-										Clip
+										{timeLabel}
 									</span>
 									{clipSpeedLabel && (
-										<span className="rounded-[4px] bg-black/10 px-1 text-[9px] font-bold tabular-nums text-black/65 dark:bg-white/15 dark:text-white/80">
+										<span className="text-[10px] opacity-70 ml-1">
 											{clipSpeedLabel}
 										</span>
 									)}
@@ -246,13 +246,13 @@ export default function Item({
 								<>
 									<Gauge className="w-3.5 h-3.5 shrink-0" />
 									<span className="text-[11px] font-semibold tracking-tight whitespace-nowrap">
-										{speedValue !== undefined ? `${speedValue}×` : "Speed"}
+										{timeLabel}
 									</span>
 								</>
 							) : isAudio ? (
 								<>
 									<Music className="w-3.5 h-3.5 shrink-0" />
-									<span className="text-[11px] font-semibold tracking-tight truncate max-w-full">
+									<span className="text-[11px] font-semibold tracking-tight whitespace-nowrap">
 										{children}
 									</span>
 								</>
@@ -260,32 +260,11 @@ export default function Item({
 								<>
 									<MessageSquare className="w-3.5 h-3.5 shrink-0" />
 									<span className="text-[11px] font-semibold tracking-tight whitespace-nowrap">
-										{children}
+										{timeLabel}
 									</span>
 								</>
 							)}
 						</div>
-						{isZoom ? (
-							<div
-								className={`flex items-center gap-0.5 transition-opacity ${isSelected ? "opacity-70" : "opacity-0 group-hover:opacity-50"}`}
-							>
-								<PhMouseLeftClick
-									className="w-2.5 h-2.5 shrink-0"
-									weight={zoomMode === "manual" ? "regular" : "fill"}
-								/>
-								<span className="text-[9px] font-medium tracking-tight whitespace-nowrap">
-									{zoomMode === "manual" ? "Manual" : "Auto"}
-								</span>
-							</div>
-						) : (
-							<span
-								className={`text-[9px] tabular-nums tracking-tight whitespace-nowrap transition-opacity ${
-									isSelected ? "opacity-60" : "opacity-0 group-hover:opacity-40"
-								}`}
-							>
-								{timeLabel}
-							</span>
-						)}
 					</div>
 				</div>
 			</div>
