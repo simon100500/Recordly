@@ -9,6 +9,7 @@ import { getBundledWhisperExecutableCandidates } from "../paths/binaries";
 import { parseWhisperJsonCues, parseSrtCues, shouldRetryWhisperWithoutJson } from "./parser";
 import { normalizeVideoSourcePath } from "../utils";
 import { resolveRecordingSession } from "../project/session";
+import { COMPANION_AUDIO_LAYOUTS } from "../constants";
 
 const execFileAsync = promisify(execFile);
 
@@ -91,10 +92,40 @@ export async function resolveCaptionAudioCandidates(videoPath: string) {
 
 	pushCandidate(videoPath, "recording");
 
+	await pushCompanionAudioCandidates(videoPath, pushCandidate);
+
 	const requestedRecordingSession = await resolveRecordingSession(videoPath);
 	pushCandidate(requestedRecordingSession?.webcamPath, "linked webcam recording");
 
 	return candidates;
+}
+
+async function pushCompanionAudioCandidates(
+	videoPath: string,
+	pushCandidate: (path: string | null | undefined, label: string) => void,
+) {
+	const extension = path.extname(videoPath);
+	const baseName = path.basename(videoPath, extension);
+	const videoDir = path.dirname(videoPath);
+
+	for (const layout of COMPANION_AUDIO_LAYOUTS) {
+		const systemPath = path.join(videoDir, `${baseName}${layout.systemSuffix}`);
+		const micPath = path.join(videoDir, `${baseName}${layout.micSuffix}`);
+
+		try {
+			await fs.access(systemPath, fsConstants.R_OK);
+			pushCandidate(systemPath, "system audio");
+		} catch {
+			// companion file doesn't exist for this layout
+		}
+
+		try {
+			await fs.access(micPath, fsConstants.R_OK);
+			pushCandidate(micPath, "microphone audio");
+		} catch {
+			// companion file doesn't exist for this layout
+		}
+	}
 }
 
 export async function extractCaptionAudioSource(options: {
