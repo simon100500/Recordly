@@ -8,8 +8,11 @@ export interface RemovedTimelineSegment {
 
 export interface ResolvedClipSpanChange {
 	clip: ClipRegion;
+	clipRegions: ClipRegion[];
 	removedSegments: RemovedTimelineSegment[];
 	movementDeltaMs: number | null;
+	rippleDeltaMs: number;
+	rippleStartMs: number | null;
 }
 
 export function resolveClipSpanChange(params: {
@@ -26,9 +29,16 @@ export function resolveClipSpanChange(params: {
 	const rawEnd = Math.round(span.end);
 	const rawStartDelta = rawStart - oldClip.startMs;
 	const rawEndDelta = rawEnd - oldClip.endMs;
-	const isBodyDrag = Math.abs(rawStartDelta - rawEndDelta) < 1 && Math.abs(rawStartDelta) > 0;
-	const isLeftEdge = rawStartDelta !== 0 && rawEndDelta === 0;
-	const isRightEdge = rawStartDelta === 0 && rawEndDelta !== 0;
+	const edgeDriftToleranceMs = 2;
+	const isBodyDrag =
+		Math.abs(rawStartDelta - rawEndDelta) <= edgeDriftToleranceMs &&
+		Math.abs(rawStartDelta) > edgeDriftToleranceMs;
+	const isLeftEdge =
+		Math.abs(rawStartDelta) > edgeDriftToleranceMs &&
+		Math.abs(rawEndDelta) <= edgeDriftToleranceMs;
+	const isRightEdge =
+		Math.abs(rawStartDelta) <= edgeDriftToleranceMs &&
+		Math.abs(rawEndDelta) > edgeDriftToleranceMs;
 
 	const sortedForSnap = [...clipRegions].sort((left, right) => left.startMs - right.startMs);
 	const snapIndex = sortedForSnap.findIndex((clip) => clip.id === id);
@@ -40,15 +50,26 @@ export function resolveClipSpanChange(params: {
 
 	let newStart = rawStart;
 	let newEnd = rawEnd;
+	let rippleDeltaMs = 0;
+	let rippleStartMs: number | null = null;
 
-	if (
-		(isLeftEdge || isBodyDrag) &&
+	if (isLeftEdge) {
+		const leftAnchorMs = previousClip?.endMs ?? 0;
+		const timelineTrimDeltaMs = Math.max(0, rawStart - oldClip.startMs);
+		newStart = leftAnchorMs;
+		if (timelineTrimDeltaMs > 0) {
+			newEnd = Math.max(newStart, oldClip.endMs - timelineTrimDeltaMs);
+			rippleDeltaMs = newEnd - oldClip.endMs;
+			rippleStartMs = oldClip.endMs;
+		}
+	} else if (
+		isBodyDrag &&
 		previousClip &&
 		Math.abs(rawStart - previousClip.endMs) < snapThresholdMs
 	) {
 		const shift = previousClip.endMs - rawStart;
 		newStart = rawStart + shift;
-		if (isBodyDrag) newEnd = rawEnd + shift;
+		newEnd = rawEnd + shift;
 	} else if (
 		(isRightEdge || isBodyDrag) &&
 		nextClip &&
@@ -59,27 +80,77 @@ export function resolveClipSpanChange(params: {
 		if (isBodyDrag) newStart = rawStart + shift;
 	}
 
-	const startDelta = newStart - oldClip.startMs;
+	if (isRightEdge) {
+		rippleDeltaMs = newEnd - oldClip.endMs;
+		rippleStartMs = oldClip.endMs;
+	}
+
+	const sourceStartDelta = isLeftEdge
+		? rawStart > oldClip.startMs
+			? rawStart - oldClip.startMs
+			: newStart - oldClip.startMs
+		: newStart - oldClip.startMs;
 	let newSourceStartMs = oldClip.sourceStartMs ?? oldClip.startMs;
 	if (isLeftEdge) {
-		newSourceStartMs = Math.max(0, Math.round(newSourceStartMs + startDelta));
+		const speed = Number.isFinite(oldClip.speed) && oldClip.speed > 0 ? oldClip.speed : 1;
+		newSourceStartMs = Math.max(0, Math.round(newSourceStartMs + sourceStartDelta * speed));
 	}
 
 	const removedSegments = [
-		...(newStart > oldClip.startMs ? [{ startMs: oldClip.startMs, endMs: newStart }] : []),
+		...(sourceStartDelta > 0 ? [{ startMs: newEnd, endMs: oldClip.endMs }] : []),
 		...(newEnd < oldClip.endMs ? [{ startMs: newEnd, endMs: oldClip.endMs }] : []),
 	];
+	const uniqueRemovedSegments = removedSegments.filter(
+		(segment, index) =>
+			removedSegments.findIndex(
+				(candidate) =>
+					candidate.startMs === segment.startMs && candidate.endMs === segment.endMs,
+			) === index,
+	);
+
+	const updatedClip = {
+		...oldClip,
+		startMs: newStart,
+		endMs: newEnd,
+		sourceStartMs: newSourceStartMs,
+	};
+	const updatedClipRegions = clipRegionsWithRipple({
+		clipRegions,
+		id,
+		updatedClip,
+		rippleStartMs,
+		rippleDeltaMs,
+	});
 
 	return {
-		clip: {
-			...oldClip,
-			startMs: newStart,
-			endMs: newEnd,
-			sourceStartMs: newSourceStartMs,
-		},
-		removedSegments,
+		clip: updatedClip,
+		clipRegions: updatedClipRegions,
+		removedSegments: uniqueRemovedSegments,
 		movementDeltaMs: isBodyDrag ? newStart - oldClip.startMs : null,
+		rippleDeltaMs,
+		rippleStartMs,
 	};
+}
+
+function clipRegionsWithRipple(params: {
+	clipRegions: ClipRegion[];
+	id: string;
+	updatedClip: ClipRegion;
+	rippleStartMs: number | null;
+	rippleDeltaMs: number;
+}) {
+	const { clipRegions, id, updatedClip, rippleStartMs, rippleDeltaMs } = params;
+	return clipRegions.map((clip) => {
+		if (clip.id === id) return updatedClip;
+		if (rippleStartMs !== null && rippleDeltaMs !== 0 && clip.startMs >= rippleStartMs) {
+			return {
+				...clip,
+				startMs: clip.startMs + rippleDeltaMs,
+				endMs: clip.endMs + rippleDeltaMs,
+			};
+		}
+		return clip;
+	});
 }
 
 export function resolveRippleClipDelete(

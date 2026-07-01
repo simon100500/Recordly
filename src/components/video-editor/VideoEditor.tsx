@@ -123,9 +123,8 @@ import type { SourceAudioTrackSettings } from "@/components/video-editor/audio/a
 import { extensionHost } from "@/lib/extensions";
 import { useVideoEditorAudio } from "./audio/useVideoEditorAudio";
 import { resolveAutoCaptionSourcePath } from "./autoCaptionSource";
-import { type CaptionEditTarget, updateCaptionCuesForEditedTarget } from "./captionEditing";
-import { detectSilence, invertSilence } from "./silenceDetection";
 import { CropControl } from "./CropControl";
+import { type CaptionEditTarget, updateCaptionCuesForEditedTarget } from "./captionEditing";
 import { ExportSettingsMenu } from "./ExportSettingsMenu";
 import ExtensionManager from "./ExtensionManager";
 import {
@@ -159,6 +158,7 @@ import {
 	validateProjectData,
 } from "./projectPersistence";
 import { SettingsPanel } from "./SettingsPanel";
+import { detectSilence, invertSilence } from "./silenceDetection";
 import { getDevOpenRecordingConfig, getSmokeExportConfig } from "./smokeExportConfig";
 import { createSmokeExportProgressSampler } from "./smokeExportProgress";
 import {
@@ -211,9 +211,9 @@ import {
 	getClipSourceEndMs,
 	getTimelineDurationMs,
 	type Padding,
-	type SilenceDetectionSettings,
 	mapSourceTimeToTimelineTime as resolveSourceTimeToTimelineTime,
 	mapTimelineTimeToSourceTime as resolveTimelineTimeToSourceTime,
+	type SilenceDetectionSettings,
 	type SpeedRegion,
 	type TrimRegion,
 	trimsToClips,
@@ -407,9 +407,8 @@ export default function VideoEditor() {
 	const [projectSaveDialogDraft, setProjectSaveDialogDraft] = useState("");
 	const [isSavingProjectDialog, setIsSavingProjectDialog] = useState(false);
 	const [unsavedChangesDialogOpen, setUnsavedChangesDialogOpen] = useState(false);
-	const [unsavedChangesDialogActionLabel, setUnsavedChangesDialogActionLabel] = useState(
-		"continue",
-	);
+	const [unsavedChangesDialogActionLabel, setUnsavedChangesDialogActionLabel] =
+		useState("continue");
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [isPlaying, setIsPlaying] = useState(false);
@@ -580,8 +579,12 @@ export default function VideoEditor() {
 	const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
 	const [exportError, setExportError] = useState<string | null>(null);
 	const [showExportDropdown, setShowExportDropdown] = useState(false);
-	useEffect(() => { clipRegionsRef.current = clipRegions; }, [clipRegions]);
-	useEffect(() => { zoomRegionsRef.current = zoomRegions; }, [zoomRegions]);
+	useEffect(() => {
+		clipRegionsRef.current = clipRegions;
+	}, [clipRegions]);
+	useEffect(() => {
+		zoomRegionsRef.current = zoomRegions;
+	}, [zoomRegions]);
 	const [previewVolume, setPreviewVolume] = useState(1);
 	const applySessionPresentation = useCallback(
 		(
@@ -2974,9 +2977,7 @@ export default function VideoEditor() {
 			startMs: Math.max(0, Math.round(r.startMs - pad)),
 			endMs: Math.min(totalMs, Math.round(r.endMs + pad)),
 		}));
-		const speed = clipRegionsRef.current.length > 0
-			? clipRegionsRef.current[0].speed
-			: 1;
+		const speed = clipRegionsRef.current.length > 0 ? clipRegionsRef.current[0].speed : 1;
 		let newClips: ClipRegion[] = rawRegions.map((r) => ({
 			id: crypto.randomUUID(),
 			startMs: r.startMs,
@@ -3588,7 +3589,9 @@ export default function VideoEditor() {
 								const id = `clip-${nextClipIdRef.current++}`;
 								autoFullTrackClipIdRef.current = id;
 								autoFullTrackClipEndMsRef.current = totalMs;
-								return [{ id, startMs: 0, endMs: totalMs, speed: 1, sourceStartMs: 0 }];
+								return [
+									{ id, startMs: 0, endMs: totalMs, speed: 1, sourceStartMs: 0 },
+								];
 							})();
 
 				if (trimRegions.length > 0) {
@@ -4074,25 +4077,40 @@ export default function VideoEditor() {
 			}
 
 			const { removedSegments } = resolved;
-			if (removedSegments.length > 0) {
-				const removeTrimmedRegions = <T extends { startMs: number; endMs: number }>(
+			if (
+				removedSegments.length > 0 ||
+				(resolved.rippleStartMs !== null && resolved.rippleDeltaMs !== 0)
+			) {
+				const updateTrimmedRegions = <T extends { startMs: number; endMs: number }>(
 					regions: T[],
 				): T[] =>
-					regions.filter(
-						(region) =>
-							!removedSegments.some(
-								(segment) =>
-									region.startMs < segment.endMs &&
-									region.endMs > segment.startMs,
-							),
-					);
-				setZoomRegions((prev) => removeTrimmedRegions(prev));
-				setAnnotationRegions((prev) => removeTrimmedRegions(prev));
-				setSpeedRegions((prev) => removeTrimmedRegions(prev));
-				setAudioRegions((prev) => removeTrimmedRegions(prev));
+					regions
+						.filter(
+							(region) =>
+								!removedSegments.some(
+									(segment) =>
+										region.startMs < segment.endMs &&
+										region.endMs > segment.startMs,
+								),
+						)
+						.map((region) =>
+							resolved.rippleStartMs !== null &&
+							resolved.rippleDeltaMs !== 0 &&
+							region.startMs >= resolved.rippleStartMs
+								? {
+										...region,
+										startMs: region.startMs + resolved.rippleDeltaMs,
+										endMs: region.endMs + resolved.rippleDeltaMs,
+									}
+								: region,
+						);
+				setZoomRegions((prev) => updateTrimmedRegions(prev));
+				setAnnotationRegions((prev) => updateTrimmedRegions(prev));
+				setSpeedRegions((prev) => updateTrimmedRegions(prev));
+				setAudioRegions((prev) => updateTrimmedRegions(prev));
 			}
 
-			setClipRegions((prev) => prev.map((clip) => (clip.id === id ? resolved.clip : clip)));
+			setClipRegions(resolved.clipRegions);
 		},
 		[clipRegions],
 	);
