@@ -871,6 +871,7 @@ const CAPTION_LANGUAGE_OPTIONS = [
 	{ value: "zh", label: "Chinese (Simplified)" },
 	{ value: "ja", label: "Japanese" },
 	{ value: "ko", label: "Korean" },
+	{ value: "ru", label: "Russian" },
 ] as const;
 
 const APP_LANGUAGE_LABELS: Record<AppLocale, string> = {
