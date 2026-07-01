@@ -556,6 +556,8 @@ export default function VideoEditor() {
 		useState<SilenceDetectionSettings>(DEFAULT_SILENCE_DETECTION_SETTINGS);
 	const originalClipPositionsRef = useRef<{ startMs: number; endMs: number }[] | null>(null);
 	const originalZoomPositionsRef = useRef<ZoomRegion[] | null>(null);
+	const clipRegionsRef = useRef<ClipRegion[]>([]);
+	const zoomRegionsRef = useRef<ZoomRegion[]>([]);
 	const [includeCaptionSidecar, setIncludeCaptionSidecar] = useState(false);
 	const [whisperExecutablePath, setWhisperExecutablePath] = useState<string | null>(
 		initialEditorPreferences.whisperExecutablePath,
@@ -575,6 +577,8 @@ export default function VideoEditor() {
 	const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
 	const [exportError, setExportError] = useState<string | null>(null);
 	const [showExportDropdown, setShowExportDropdown] = useState(false);
+	useEffect(() => { clipRegionsRef.current = clipRegions; }, [clipRegions]);
+	useEffect(() => { zoomRegionsRef.current = zoomRegions; }, [zoomRegions]);
 	const [previewVolume, setPreviewVolume] = useState(1);
 	const applySessionPresentation = useCallback(
 		(
@@ -2967,16 +2971,20 @@ export default function VideoEditor() {
 		const finalRegions = silenceDetectionSettings.collapse
 			? collapseClips(rawRegions)
 			: rawRegions;
+		const speed = clipRegionsRef.current.length > 0
+			? clipRegionsRef.current[0].speed
+			: 1;
 		const newClips: ClipRegion[] = finalRegions.map((r) => ({
 			id: crypto.randomUUID(),
 			startMs: r.startMs,
 			endMs: r.endMs,
-			speed: 1,
+			speed,
 		}));
 		originalClipPositionsRef.current = rawRegions;
+		originalZoomPositionsRef.current = zoomRegionsRef.current;
 		setClipRegions(newClips);
 		if (silenceDetectionSettings.collapse) {
-			setZoomRegions((prev) => shiftZoomsForCollapsed(prev, rawRegions));
+			setZoomRegions(shiftZoomsForCollapsed(zoomRegionsRef.current, rawRegions));
 		}
 		toast.success(`Created ${newClips.length} clip regions from silence detection`);
 	}, [duration, silenceDetectionSettings]);
