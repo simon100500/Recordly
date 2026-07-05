@@ -17,8 +17,8 @@ export function useVoiceoverRecorder() {
 
 		const audioConstraints: MediaTrackConstraints = {
 			echoCancellation: true,
-			noiseSuppression: true,
-			autoGainControl: true,
+			noiseSuppression: false,
+			autoGainControl: false,
 			channelCount: { ideal: 2 },
 			sampleRate: { ideal: 48000 },
 			sampleSize: { ideal: 24 },
