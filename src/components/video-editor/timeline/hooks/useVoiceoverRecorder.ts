@@ -11,21 +11,26 @@ export function useVoiceoverRecorder() {
 	const chunksRef = useRef<Blob[]>([]);
 	const resolveRef = useRef<{ resolve: (path: string | null) => void; promise: Promise<string | null> } | null>(null);
 
-	const startRecording = useCallback(async (): Promise<string | null> => {
+	const startRecording = useCallback(async (deviceId?: string): Promise<string | null> => {
 		if (isRecording) return null;
 		chunksRef.current = [];
+
+		const audioConstraints: MediaTrackConstraints = {
+			echoCancellation: true,
+			noiseSuppression: true,
+			autoGainControl: true,
+			channelCount: { ideal: 2 },
+			sampleRate: { ideal: 48000 },
+			sampleSize: { ideal: 24 },
+		};
+		if (deviceId) {
+			audioConstraints.deviceId = { exact: deviceId };
+		}
 
 		let micStream: MediaStream;
 		try {
 			micStream = await navigator.mediaDevices.getUserMedia({
-				audio: {
-					echoCancellation: true,
-					noiseSuppression: true,
-					autoGainControl: true,
-					channelCount: { ideal: 2 },
-					sampleRate: { ideal: 48000 },
-					sampleSize: { ideal: 24 },
-				},
+				audio: audioConstraints,
 				video: false,
 			});
 		} catch (err) {

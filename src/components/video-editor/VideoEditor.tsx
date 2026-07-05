@@ -121,6 +121,7 @@ const PhSettings = (props: { className?: string; weight?: "fill" | "regular" }) 
 
 import type { SourceAudioTrackSettings } from "@/components/video-editor/audio/audioTypes";
 import { extensionHost } from "@/lib/extensions";
+import { useMicrophoneDevices } from "@/hooks/useMicrophoneDevices";
 import { useVideoEditorAudio } from "./audio/useVideoEditorAudio";
 import { useVoiceoverRecorder } from "./timeline/hooks/useVoiceoverRecorder";
 import { resolveAutoCaptionSourcePath } from "./autoCaptionSource";
@@ -3714,6 +3715,12 @@ export default function VideoEditor() {
 		},
 	});
 
+	const {
+		devices: voiceoverMicDevices,
+		selectedDeviceId: voiceoverDeviceId,
+		setSelectedDeviceId: setVoiceoverDeviceId,
+	} = useMicrophoneDevices(true);
+
 	const voiceover = useVoiceoverRecorder();
 
 	const getActivePlayback = useCallback(() => videoPlaybackRef.current, []);
@@ -4277,9 +4284,13 @@ export default function VideoEditor() {
 		} else {
 			handleSeek(0);
 			setTimeout(() => startPlayback(), 100);
-			voiceover.startRecording();
+			voiceover.startRecording(
+				voiceoverDeviceId && voiceoverDeviceId !== "default"
+					? voiceoverDeviceId
+					: undefined,
+			);
 		}
-	}, [voiceover, handleSeek, startPlayback]);
+	}, [voiceover, handleSeek, startPlayback, voiceoverDeviceId]);
 
 	const handleAudioAdded = useCallback((span: Span, audioPath: string, trackIndex?: number) => {
 		const id = `audio-${nextAudioIdRef.current++}`;
@@ -6462,6 +6473,9 @@ export default function VideoEditor() {
 								onAudioDelete={handleAudioDelete}
 								onRecordVoiceover={handleRecordVoiceover}
 								isRecordingVoiceover={voiceover.isRecording}
+								voiceoverDeviceId={voiceoverDeviceId}
+								onVoiceoverDeviceChange={setVoiceoverDeviceId}
+								voiceoverMicDevices={voiceoverMicDevices}
 								shadowIntensity={shadowIntensity}
 								onShadowChange={setShadowIntensity}
 								backgroundBlur={backgroundBlur}

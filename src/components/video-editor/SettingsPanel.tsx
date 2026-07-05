@@ -706,6 +706,9 @@ interface SettingsPanelProps {
 	onAudioDelete?: (id: string) => void;
 	onRecordVoiceover?: () => void;
 	isRecordingVoiceover?: boolean;
+	voiceoverDeviceId?: string;
+	onVoiceoverDeviceChange?: (deviceId: string) => void;
+	voiceoverMicDevices?: Array<{ deviceId: string; label: string }>;
 	shadowIntensity?: number;
 	onShadowChange?: (intensity: number) => void;
 	backgroundBlur?: number;
@@ -1167,6 +1170,9 @@ export function SettingsPanel({
 	onAudioDelete,
 	onRecordVoiceover,
 	isRecordingVoiceover = false,
+	voiceoverDeviceId,
+	onVoiceoverDeviceChange,
+	voiceoverMicDevices = [],
 	shadowIntensity = 0.67,
 	onShadowChange,
 	backgroundBlur = 0,
@@ -3500,6 +3506,28 @@ export function SettingsPanel({
 					</>
 				) : (
 					<SectionLabel>{tSettings("audio.voiceoverTitle", "Voiceover")}</SectionLabel>
+				)}
+				{voiceoverMicDevices.length > 0 && (
+					<div className="flex items-center justify-between rounded-lg bg-foreground/[0.03] px-2.5 py-1.5">
+						<span className="text-[10px] text-muted-foreground">
+							{tSettings("audio.microphone", "Microphone")}
+						</span>
+						<Select
+							value={voiceoverDeviceId ?? voiceoverMicDevices[0]?.deviceId ?? "default"}
+							onValueChange={(id) => onVoiceoverDeviceChange?.(id)}
+						>
+							<SelectTrigger className="h-7 w-[140px] text-xs [&>span]:truncate">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent className="bg-editor-surface-alt border-foreground/10 text-xs">
+								{voiceoverMicDevices.map((device) => (
+									<SelectItem key={device.deviceId} value={device.deviceId} className="text-xs">
+										{device.label}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+					</div>
 				)}
 				<Button
 					variant={isRecordingVoiceover ? "destructive" : "secondary"}
