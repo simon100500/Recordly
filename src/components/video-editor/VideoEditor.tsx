@@ -4257,12 +4257,11 @@ export default function VideoEditor() {
 				return;
 			}
 
-			const startMs = Math.round(timelinePlayheadTime * 1000);
 			const id = `audio-${nextAudioIdRef.current++}`;
 			const newRegion: AudioRegion = {
 				id,
-				startMs,
-				endMs: startMs + durationMs,
+				startMs: 0,
+				endMs: durationMs,
 				audioPath,
 				volume: 1,
 				normalize: false,
@@ -4273,12 +4272,14 @@ export default function VideoEditor() {
 			setSelectedAnnotationId(null);
 			setActiveEffectSection("audio");
 
-			handleSeek(startMs / 1000);
+			handleSeek(0);
 			setTimeout(() => startPlayback(), 200);
 		} else {
+			handleSeek(0);
+			setTimeout(() => startPlayback(), 100);
 			voiceover.startRecording();
 		}
-	}, [voiceover, timelinePlayheadTime, handleSeek, startPlayback]);
+	}, [voiceover, handleSeek, startPlayback]);
 
 	const handleAudioAdded = useCallback((span: Span, audioPath: string, trackIndex?: number) => {
 		const id = `audio-${nextAudioIdRef.current++}`;
