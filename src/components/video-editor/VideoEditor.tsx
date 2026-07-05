@@ -122,6 +122,7 @@ const PhSettings = (props: { className?: string; weight?: "fill" | "regular" }) 
 import type { SourceAudioTrackSettings } from "@/components/video-editor/audio/audioTypes";
 import { extensionHost } from "@/lib/extensions";
 import { useVideoEditorAudio } from "./audio/useVideoEditorAudio";
+import { useVoiceoverRecorder } from "./timeline/hooks/useVoiceoverRecorder";
 import { resolveAutoCaptionSourcePath } from "./autoCaptionSource";
 import { CropControl } from "./CropControl";
 import { type CaptionEditTarget, updateCaptionCuesForEditedTarget } from "./captionEditing";
@@ -1650,6 +1651,11 @@ export default function VideoEditor() {
 				label: "Silence",
 				icon: VolumeX,
 				extensionPath: undefined,
+			},
+			{
+				id: "audio" as const,
+				label: t("settings.sections.audio", "Audio"),
+				icon: Volume2,
 			},
 			{
 				id: "settings" as const,
@@ -3708,6 +3714,8 @@ export default function VideoEditor() {
 		},
 	});
 
+	const voiceover = useVoiceoverRecorder();
+
 	const getActivePlayback = useCallback(() => videoPlaybackRef.current, []);
 
 	const startPlayback = useCallback(() => {
@@ -4226,6 +4234,51 @@ export default function VideoEditor() {
 			setActiveEffectSection("audio");
 		}
 	}, []);
+
+	const handleRecordVoiceover = useCallback(async () => {
+		if (voiceover.isRecording) {
+			const audioPath = await voiceover.stopRecording();
+			if (!audioPath) {
+				toast.error("Failed to save voiceover recording.");
+				return;
+			}
+
+			const el = new Audio();
+			const durationMs = await new Promise<number>((resolve) => {
+				el.addEventListener("loadedmetadata", () => {
+					resolve(Math.round(el.duration * 1000));
+				}, { once: true });
+				el.addEventListener("error", () => resolve(0), { once: true });
+				el.src = toFileUrl(audioPath);
+			});
+
+			if (durationMs <= 0) {
+				toast.error("Recorded voiceover has no audio data.");
+				return;
+			}
+
+			const startMs = Math.round(timelinePlayheadTime * 1000);
+			const id = `audio-${nextAudioIdRef.current++}`;
+			const newRegion: AudioRegion = {
+				id,
+				startMs,
+				endMs: startMs + durationMs,
+				audioPath,
+				volume: 1,
+				normalize: false,
+			};
+			setAudioRegions((prev) => [...prev, newRegion]);
+			setSelectedAudioId(id);
+			setSelectedZoomId(null);
+			setSelectedAnnotationId(null);
+			setActiveEffectSection("audio");
+
+			handleSeek(startMs / 1000);
+			setTimeout(() => startPlayback(), 200);
+		} else {
+			voiceover.startRecording();
+		}
+	}, [voiceover, timelinePlayheadTime, handleSeek, startPlayback]);
 
 	const handleAudioAdded = useCallback((span: Span, audioPath: string, trackIndex?: number) => {
 		const id = `audio-${nextAudioIdRef.current++}`;
@@ -6406,6 +6459,8 @@ export default function VideoEditor() {
 								onAudioVolumeChange={handleAudioVolumeChange}
 								onAudioNormalizeChange={handleAudioNormalizeChange}
 								onAudioDelete={handleAudioDelete}
+								onRecordVoiceover={handleRecordVoiceover}
+								isRecordingVoiceover={voiceover.isRecording}
 								shadowIntensity={shadowIntensity}
 								onShadowChange={setShadowIntensity}
 								backgroundBlur={backgroundBlur}

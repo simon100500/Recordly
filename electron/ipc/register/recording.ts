@@ -1763,6 +1763,24 @@ export function registerRecordingHandlers(
 		}
 	});
 
+	ipcMain.handle(
+		"store-voiceover-audio",
+		async (_, audioData: ArrayBuffer, fileName: string) => {
+			try {
+				const recordingsDir = await getRecordingsDir();
+				const audioPath = path.join(recordingsDir, fileName);
+				await fs.writeFile(audioPath, Buffer.from(audioData));
+				return { success: true, path: audioPath };
+			} catch (error) {
+				console.error("Failed to store voiceover audio:", error);
+				return {
+					success: false,
+					error: String(error),
+				};
+			}
+		},
+	);
+
 	ipcMain.handle("get-recorded-video-path", async () => {
 		try {
 			const recordingsDir = await getRecordingsDir();

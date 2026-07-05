@@ -292,6 +292,10 @@ interface Window {
 			videoData: ArrayBuffer,
 			fileName: string,
 		) => Promise<{ success: boolean; path?: string; message?: string }>;
+		storeVoiceoverAudio: (
+			audioData: ArrayBuffer,
+			fileName: string,
+		) => Promise<{ success: boolean; path?: string; error?: string }>;
 		storeMicrophoneSidecar: (
 			audioData: ArrayBuffer,
 			videoPath: string,
