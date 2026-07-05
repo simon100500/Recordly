@@ -228,10 +228,12 @@ function showHudOverlayFromTray() {
 		hud.restore();
 	}
 
+	// Disable mouse passthrough so the user can interact with buttons/menus.
+	hud.setIgnoreMouseEvents(false);
+
 	if (process.platform === "win32" && isHudOverlayMousePassthroughSupported()) {
 		hud.showInactive();
 		hud.moveTop();
-		reassertHudOverlayMouseState();
 		return true;
 	}
 
@@ -749,9 +751,9 @@ function updateTrayMenu(recording: boolean = false) {
 	trayContextMenu = menu;
 	tray.setImage(trayIcon);
 	tray.setToolTip(trayToolTip);
-	if (process.platform !== "win32") {
-		tray.setContextMenu(menu);
-	}
+	// Always set the context menu so the tray has a fallback even if
+	// popUpContextMenu fails or the tray state becomes stale.
+	tray.setContextMenu(menu);
 }
 
 function createEditorWindowWrapper() {

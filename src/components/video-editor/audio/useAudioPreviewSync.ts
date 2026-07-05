@@ -345,8 +345,16 @@ export function useAudioPreviewSync({
         if (Math.abs(audio.playbackRate - syncedPlaybackRate) > 0.001) {
           audio.playbackRate = syncedPlaybackRate;
         }
-        if (audio.paused) {
+        if (audio.paused && audio.src) {
           audio.play().catch(() => undefined);
+        } else if (audio.paused && !audio.src) {
+          const onCanPlay = () => {
+            audio.removeEventListener("canplay", onCanPlay);
+            if (isPlaying && audio.paused && audio.src) {
+              audio.play().catch(() => undefined);
+            }
+          };
+          audio.addEventListener("canplay", onCanPlay);
         }
       } else if (!audio.paused) {
         audio.pause();
