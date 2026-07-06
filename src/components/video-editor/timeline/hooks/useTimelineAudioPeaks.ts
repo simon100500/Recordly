@@ -85,8 +85,8 @@ export function useTimelineAudioPeaks(
 					setLoading(false);
 				}
 				return;
-			} catch {
-				// fallthrough
+			} catch (error) {
+				console.warn("[useTimelineAudioPeaks] Primary waveform generation failed:", error);
 			}
 
 			if (!enableSourceSidecarFallback && fallbackResources.length === 0) {
@@ -120,8 +120,8 @@ export function useTimelineAudioPeaks(
 						setLoading(false);
 					}
 					return;
-				} catch {
-					// try next
+				} catch (error) {
+					console.warn(`[useTimelineAudioPeaks] Sidecar candidate failed: ${candidate}`, error);
 				}
 			}
 

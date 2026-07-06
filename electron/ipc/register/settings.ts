@@ -22,12 +22,13 @@ import {
 import { parseJsonWithByteOrderMark } from "../utils";
 
 const BROWSER_MICROPHONE_PROFILE_ENV = "RECORDLY_BROWSER_MIC_PROFILE";
-const DEFAULT_BROWSER_MICROPHONE_PROFILE = "processed";
+const DEFAULT_BROWSER_MICROPHONE_PROFILE = "voiceover";
 const BROWSER_MICROPHONE_PROFILES = new Set([
 	"processed",
 	"no-agc",
 	"no-echo",
 	"no-noise-suppression",
+	"voiceover",
 	"raw",
 ]);
 

@@ -33,12 +33,12 @@ function createMockMediaRecorder(initialState: RecordingState = "inactive") {
 }
 
 describe("createProcessedMicrophoneConstraints", () => {
-	it("requests browser voice processing with AGC for the default microphone", () => {
+	it("requests browser voice processing without AGC or noise suppression for the default microphone", () => {
 		expect(createProcessedMicrophoneConstraints()).toEqual({
 			audio: {
 				echoCancellation: true,
-				noiseSuppression: true,
-				autoGainControl: true,
+				noiseSuppression: false,
+				autoGainControl: false,
 				channelCount: { ideal: 2 },
 				sampleRate: { ideal: 48000 },
 				sampleSize: { ideal: 24 },
@@ -47,13 +47,13 @@ describe("createProcessedMicrophoneConstraints", () => {
 		});
 	});
 
-	it("keeps default voice processing when a specific microphone is selected", () => {
+	it("keeps default voice processing without AGC when a specific microphone is selected", () => {
 		expect(createProcessedMicrophoneConstraints("device-123")).toMatchObject({
 			audio: {
 				deviceId: { exact: "device-123" },
 				echoCancellation: true,
-				noiseSuppression: true,
-				autoGainControl: true,
+				noiseSuppression: false,
+				autoGainControl: false,
 				channelCount: { ideal: 2 },
 				sampleRate: { ideal: 48000 },
 			},
@@ -105,10 +105,21 @@ describe("createProcessedMicrophoneConstraints", () => {
 		});
 	});
 
-	it("normalizes invalid lab microphone profiles to production voice processing", () => {
+	it("uses the voiceover profile for natural microphone input", () => {
+		expect(createProcessedMicrophoneConstraints(undefined, "voiceover")).toMatchObject({
+			audio: {
+				echoCancellation: true,
+				noiseSuppression: false,
+				autoGainControl: false,
+			},
+			video: false,
+		});
+	});
+
+	it("normalizes invalid microphone profiles to the voiceover default", () => {
 		expect(normalizeBrowserMicrophoneProfile("RAW")).toBe("raw");
-		expect(normalizeBrowserMicrophoneProfile("unknown")).toBe("processed");
-		expect(normalizeBrowserMicrophoneProfile(null)).toBe("processed");
+		expect(normalizeBrowserMicrophoneProfile("unknown")).toBe("voiceover");
+		expect(normalizeBrowserMicrophoneProfile(null)).toBe("voiceover");
 	});
 });
 

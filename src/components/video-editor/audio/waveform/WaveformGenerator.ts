@@ -14,6 +14,9 @@ export class WaveformGenerator {
 
 	constructor() {
 		this.audioContext = new (window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext)();
+		if (this.audioContext.state === "suspended") {
+			this.audioContext.resume();
+		}
 		this.worker = new WorkerConstructor();
 		
 		this.worker.addEventListener(
@@ -75,6 +78,9 @@ export class WaveformGenerator {
 			}
 
 			const arrayBuffer = await response.arrayBuffer();
+			if (this.audioContext.state === "suspended") {
+				await this.audioContext.resume();
+			}
 			const decoded = await this.audioContext.decodeAudioData(arrayBuffer);
 			const adaptivePeakCount = Math.max(
 				peakCount,

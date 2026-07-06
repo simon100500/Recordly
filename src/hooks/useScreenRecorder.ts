@@ -44,6 +44,7 @@ export type BrowserMicrophoneProfile =
 	| "no-agc"
 	| "no-echo"
 	| "no-noise-suppression"
+	| "voiceover"
 	| "raw";
 type BrowserCaptureCursorMode = "always" | "never";
 export type BrowserCaptureCursorPolicy = {
@@ -51,12 +52,13 @@ export type BrowserCaptureCursorPolicy = {
 	hideOsCursorBeforeRecording: boolean;
 	hideEditorOverlayCursorByDefault: boolean;
 };
-const DEFAULT_BROWSER_MICROPHONE_PROFILE: BrowserMicrophoneProfile = "processed";
+const DEFAULT_BROWSER_MICROPHONE_PROFILE: BrowserMicrophoneProfile = "voiceover";
 const BROWSER_MICROPHONE_PROFILES = new Set<BrowserMicrophoneProfile>([
 	"processed",
 	"no-agc",
 	"no-echo",
 	"no-noise-suppression",
+	"voiceover",
 	"raw",
 ]);
 type MicrophoneTrackSettingsSnapshot = Partial<
@@ -224,6 +226,24 @@ export function createProcessedMicrophoneConstraints(
 	profile: BrowserMicrophoneProfile = DEFAULT_BROWSER_MICROPHONE_PROFILE,
 ): MediaStreamConstraints {
 	const normalizedProfile = normalizeBrowserMicrophoneProfile(profile);
+
+	if (normalizedProfile === "voiceover") {
+		const audio: MediaTrackConstraints = {
+			echoCancellation: true,
+			noiseSuppression: false,
+			autoGainControl: false,
+			channelCount: { ideal: 2 },
+			sampleRate: { ideal: 48000 },
+			sampleSize: { ideal: 24 },
+		};
+
+		if (microphoneDeviceId) {
+			audio.deviceId = { exact: microphoneDeviceId };
+		}
+
+		return { audio, video: false };
+	}
+
 	const audio: MediaTrackConstraints = {
 		echoCancellation: normalizedProfile !== "no-echo" && normalizedProfile !== "raw",
 		noiseSuppression:
