@@ -3562,19 +3562,31 @@ export default function VideoEditor() {
 		return getDisplayedTimelineWindowMs(totalMs, trimRegions);
 	}, [duration, trimRegions]);
 
-	// Filter out cursor telemetry samples that fall within trimmed regions
-	// so click effects and cursor state don't bleed from removed footage.
+	// Filter out cursor telemetry samples that fall within internal trimmed
+	// regions so click effects and cursor state don't bleed from removed
+	// footage.  Boundary trim regions (start or end of the video) are
+	// excluded because playback does not skip them — the video still shows
+	// that content, and removing samples would leave the cursor frozen at the
+	// last pre-trim position instead of tracking the actual cursor movement.
 	const cursorTelemetryExcludingTrimRegions = useMemo(() => {
 		if (trimRegions.length === 0 || normalizedCursorTelemetry.length === 0) {
 			return normalizedCursorTelemetry;
 		}
+
+		const videoDurationMs = Math.max(0, Math.round(duration * 1000));
+		const isBoundaryTrim = (trim: TrimRegion) =>
+			trim.startMs <= 0 || trim.endMs >= videoDurationMs;
+
 		return normalizedCursorTelemetry.filter(
 			(sample) =>
 				!trimRegions.some(
-					(trim) => sample.timeMs >= trim.startMs && sample.timeMs <= trim.endMs,
+					(trim) =>
+						!isBoundaryTrim(trim) &&
+						sample.timeMs >= trim.startMs &&
+						sample.timeMs <= trim.endMs,
 				),
 		);
-	}, [normalizedCursorTelemetry, trimRegions]);
+	}, [normalizedCursorTelemetry, trimRegions, duration]);
 
 	const effectiveCursorTelemetry = useMemo(() => {
 		const baseTelemetry = cursorTelemetryExcludingTrimRegions;
