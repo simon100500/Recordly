@@ -142,19 +142,19 @@ export default function Item({
 					height: "100%",
 					display: "flex",
 					alignItems: "center",
-					padding: "0 3px",
 				}}
 			>
 				<div
 					className={cn(
 						glassClass,
-						"w-full overflow-hidden relative cursor-grab active:cursor-grabbing",
+						"flex-1 overflow-hidden relative cursor-grab active:cursor-grabbing",
 						isSelected && glassStyles.selected,
 					)}
 					style={{
 						height: "85%",
 						minHeight: 22,
 						minWidth: MIN_ITEM_PX,
+						margin: "0 2px",
 					}}
 					onClick={(event) => {
 						event.stopPropagation();
@@ -175,6 +175,8 @@ export default function Item({
 							peaks={waveformPeaks}
 							segmentStartMs={waveformSegmentSpan?.start ?? span.start}
 							segmentEndMs={waveformSegmentSpan?.end ?? span.end}
+							displayStartMs={span.start}
+							displayEndMs={span.end}
 							gain={waveformGain}
 							normalize={waveformNormalize}
 							className="absolute inset-0 w-full h-full pointer-events-none opacity-70"

@@ -7,6 +7,8 @@ interface AudioWaveformProps {
 	peaks: AudioPeaksData;
 	segmentStartMs?: number;
 	segmentEndMs?: number;
+	displayStartMs?: number;
+	displayEndMs?: number;
 	gain?: number;
 	normalize?: boolean;
 	className?: string;
@@ -19,41 +21,63 @@ const MIN_BARS = 4;
 const BAR_PITCH_CSS = 2;
 
 /**
- * Audio waveform rendered as plain DOM bars — NO canvas.
+ * Audio waveform as plain DOM bars — NO canvas.
  *
- * This is intentionally dumb and stable: the bars are flex children of the
- * clip, so they scroll and zoom together with the clip in the SAME React
- * commit. There is no separate draw loop, no ResizeObserver, no rAF — so the
- * waveform can never drift out of sync with the clip block (which was happening
- * with the canvas approach, especially during zoom).
+ * The bars are flex children of the clip, so they move with it natively (same
+ * React commit) — no separate draw loop to drift out of sync.
  *
- * Each bar keeps the maximum peak level that falls in its time slice — an
- * honest loudness histogram. The bar count adapts to the clip's rendered width
- * (zoom level), so detail improves as you zoom in.
+ * IMPORTANT — zoom/pan correctness: when a clip is wider than the viewport,
+ * dnd-timeline pins the clip's content box to the visible window (via padding).
+ * So we must render bars only for the portion of the audio that is CURRENTLY
+ * VISIBLE (the intersection of the clip with the timeline range, mapped to
+ * source time). As the user pans, the visible window changes → the bars update
+ * → the waveform scrolls. Rendering the whole segment would look static in that
+ * pinned state. Each bar keeps the max peak level in its time slice.
  */
 function AudioWaveformComponent({
 	peaks,
 	segmentStartMs,
 	segmentEndMs,
+	displayStartMs,
+	displayEndMs,
 	gain = 1,
 	normalize = false,
 	className,
 }: AudioWaveformProps) {
 	const { range, valueToPixels } = useTimelineContext();
 
-	const segStart = segmentStartMs ?? range.start;
-	const segEnd = segmentEndMs ?? range.end;
-	const segDurationMs = Math.max(0, segEnd - segStart);
+	// Display span = where the clip sits on the timeline; segment span = which
+	// part of the source audio it plays back.
+	const dispStart = displayStartMs ?? segmentStartMs ?? range.start;
+	const dispEnd = displayEndMs ?? segmentEndMs ?? range.end;
+	const segStart = segmentStartMs ?? dispStart;
+	const segEnd = segmentEndMs ?? dispEnd;
+	const dispDur = Math.max(0, dispEnd - dispStart);
+	const segDur = Math.max(0, segEnd - segStart);
 
+	// Visible timeline window within this clip.
+	const visTLStart = Math.max(dispStart, range.start);
+	const visTLEnd = Math.min(dispEnd, range.end);
+	const visTLDur = Math.max(0, visTLEnd - visTLStart);
+
+	// Map the visible timeline window to source audio time.
+	const toSrc = (tlMs: number) =>
+		dispDur > 0 && segDur > 0 ? segStart + ((tlMs - dispStart) / dispDur) * segDur : tlMs;
+	const visSrcStart = toSrc(visTLStart);
+	const visSrcEnd = toSrc(visTLEnd);
+	const visSrcDur = Math.max(0, visSrcEnd - visSrcStart);
+
+	// Bar count follows the VISIBLE width (the pinned content box), not the
+	// whole clip — so resolution stays high at every zoom level.
 	const numBars = useMemo(() => {
-		if (segDurationMs <= 0) return 0;
-		const widthCss = valueToPixels(segDurationMs);
+		if (visTLDur <= 0) return 0;
+		const widthCss = valueToPixels(visTLDur);
 		return Math.max(MIN_BARS, Math.min(MAX_BARS, Math.round(widthCss / BAR_PITCH_CSS)));
-	}, [segDurationMs, valueToPixels]);
+	}, [visTLDur, valueToPixels]);
 
 	const bars = useMemo(() => {
 		const { peaks: peakData, durationMs } = peaks;
-		if (numBars === 0 || durationMs <= 0 || peakData.length === 0 || segDurationMs <= 0) {
+		if (numBars === 0 || durationMs <= 0 || peakData.length === 0 || visSrcDur <= 0) {
 			return [] as number[];
 		}
 		const n = peakData.length;
@@ -61,8 +85,8 @@ function AudioWaveformComponent({
 		const levels = new Array<number>(numBars).fill(0);
 		for (let i = 0; i < n; i++) {
 			const t = (i / denom) * durationMs;
-			if (t < segStart || t > segEnd) continue;
-			const frac = (t - segStart) / segDurationMs;
+			if (t < visSrcStart || t > visSrcEnd) continue;
+			const frac = (t - visSrcStart) / visSrcDur;
 			const idx = Math.min(numBars - 1, Math.floor(frac * numBars));
 			let amp = peakData[i];
 			if (normalize) amp = Math.sqrt(Math.max(0, amp));
@@ -70,7 +94,7 @@ function AudioWaveformComponent({
 			if (amp > levels[idx]) levels[idx] = amp;
 		}
 		return levels;
-	}, [peaks, segStart, segEnd, segDurationMs, numBars, gain, normalize]);
+	}, [peaks, visSrcStart, visSrcEnd, visSrcDur, numBars, gain, normalize]);
 
 	if (bars.length === 0) return null;
 
