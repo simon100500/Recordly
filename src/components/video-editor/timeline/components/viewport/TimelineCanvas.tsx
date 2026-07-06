@@ -67,6 +67,8 @@ interface TimelineCanvasProps {
 	showSourceAudioTrack?: boolean;
 	liveSpanPreviewById?: Record<string, { start: number; end: number }>;
 	liveSourceSpanPreviewById?: Record<string, { start: number; end: number }>;
+	activeResizeId?: string | null;
+	activeResizeDisplaySpan?: { start: number; end: number } | null;
 	liveHiddenItemIds?: string[];
 	isLoading?: boolean;
 }
@@ -242,6 +244,8 @@ interface TimelineCanvasRowsProps {
 	showSourceAudioTrack?: boolean;
 	liveSpanPreviewById?: Record<string, { start: number; end: number }>;
 	liveSourceSpanPreviewById?: Record<string, { start: number; end: number }>;
+	activeResizeId?: string | null;
+	activeResizeDisplaySpan?: { start: number; end: number } | null;
 	liveHiddenItemIds?: string[];
 	direction: string;
 	canShowGhostZoom: boolean;
@@ -310,6 +314,8 @@ const TimelineCanvasRows = memo(function TimelineCanvasRows({
 	showSourceAudioTrack = false,
 	liveSpanPreviewById,
 	liveSourceSpanPreviewById,
+	activeResizeId,
+	activeResizeDisplaySpan,
 	liveHiddenItemIds,
 	direction,
 	canShowGhostZoom,
@@ -379,8 +385,14 @@ const TimelineCanvasRows = memo(function TimelineCanvasRows({
 			<Row id={CLIP_ROW_ID} isEmpty={clipItems.length === 0} hint={HINT_CLIP}>
 				<ClipMarkerOverlay videoDurationMs={videoDurationMs} />
 				{clipItems.map((item) => {
-					const previewSpan = liveSpanPreviewById?.[item.id];
+					const isActiveResize = item.id === activeResizeId;
+					const previewSpan = isActiveResize
+						? undefined
+						: liveSpanPreviewById?.[item.id];
 					const previewSourceSpan = liveSourceSpanPreviewById?.[item.id];
+					const previewDisplaySpan = isActiveResize
+						? (activeResizeDisplaySpan ?? undefined)
+						: undefined;
 					return (
 						<Item
 							id={item.id}
@@ -391,6 +403,7 @@ const TimelineCanvasRows = memo(function TimelineCanvasRows({
 							onSelectId={onSelectClip}
 							variant="clip"
 							speedValue={item.speedValue}
+							previewDisplaySpan={previewDisplaySpan}
 							waveformPeaks={sourceAudioTracks[0]?.peaks ?? null}
 							waveformSegmentSpan={
 								previewSourceSpan ?? resolvePreviewSourceSpan(item, previewSpan)
@@ -566,6 +579,8 @@ export default function TimelineCanvas({
 	showSourceAudioTrack = false,
 	liveSpanPreviewById,
 	liveSourceSpanPreviewById,
+	activeResizeId,
+	activeResizeDisplaySpan,
 	liveHiddenItemIds,
 	isLoading = false,
 }: TimelineCanvasProps) {
@@ -813,6 +828,8 @@ export default function TimelineCanvas({
 					showSourceAudioTrack={showSourceAudioTrack}
 					liveSpanPreviewById={liveSpanPreviewById}
 					liveSourceSpanPreviewById={liveSourceSpanPreviewById}
+					activeResizeId={activeResizeId}
+					activeResizeDisplaySpan={activeResizeDisplaySpan}
 					liveHiddenItemIds={liveHiddenItemIds}
 					direction={direction}
 					canShowGhostZoom={canShowGhostZoom}

@@ -6,6 +6,8 @@ import { getClipSourceEndMs } from "../types";
 export interface ClipLiveResizePreview {
 	span: Span;
 	sourceSpan: Span;
+	rippleDeltaMs: number;
+	rippleStartMs: number | null;
 }
 
 export function resolveClipLiveResizePreview(
@@ -20,5 +22,7 @@ export function resolveClipLiveResizePreview(
 	return {
 		span: { start: resolved.clip.startMs, end: resolved.clip.endMs },
 		sourceSpan: { start: sourceStart, end: getClipSourceEndMs(resolved.clip) },
+		rippleDeltaMs: resolved.rippleDeltaMs,
+		rippleStartMs: resolved.rippleStartMs,
 	};
 }

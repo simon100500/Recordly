@@ -18,6 +18,7 @@ import type {
 	ZoomFocus,
 	ZoomRegion,
 } from "../types";
+import { getClipSourceEndMs } from "../types";
 import KeyframeMarkers from "./components/markers/KeyframeMarkers";
 import TimelineCanvas from "./components/viewport/TimelineCanvas";
 import TimelineWrapper from "./components/wrapper/TimelineWrapper";
@@ -185,9 +186,11 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
 
 		const [liveSpanPreviewById, setLiveSpanPreviewById] = useState<Record<string, Span>>({});
 		const liveZoomPreview = useMemo(() => {
-			const previewSpans: Record<string, Span> = { ...liveSpanPreviewById };
+			const previewSpans: Record<string, Span> = {};
 			const sourcePreviewSpans: Record<string, Span> = {};
 			const hiddenZoomIds = new Set<string>();
+			let activeResizeId: string | null = null;
+			let activeResizeDisplaySpan: Span | null = null;
 
 			for (const [previewId, rawPreviewSpan] of Object.entries(liveSpanPreviewById)) {
 				const oldClip = clipRegions.find((clip) => clip.id === previewId);
@@ -199,21 +202,43 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
 				);
 				const previewSpan = clipPreview?.span ?? rawPreviewSpan;
 				if (clipPreview) {
-					previewSpans[previewId] = clipPreview.span;
+					// Active clip: store source span + display span for waveform overlay
 					sourcePreviewSpans[previewId] = clipPreview.sourceSpan;
+					activeResizeId = previewId;
+					activeResizeDisplaySpan = clipPreview.span;
+
+					// Do NOT add active clip to previewSpans — overriding Item.span
+					// mid-resize conflicts with dnd-timeline's direct DOM manipulation
+					// and causes position jumps. dnd-timeline handles the visual.
+
+					// Ripple: add shifted spans for following clips
+					if (clipPreview.rippleDeltaMs !== 0 && clipPreview.rippleStartMs !== null) {
+						for (const clip of clipRegions) {
+							if (clip.id !== previewId && clip.startMs >= clipPreview.rippleStartMs) {
+								previewSpans[clip.id] = {
+									start: clip.startMs + clipPreview.rippleDeltaMs,
+									end: clip.endMs + clipPreview.rippleDeltaMs,
+								};
+								sourcePreviewSpans[clip.id] = {
+									start: clip.sourceStartMs ?? clip.startMs,
+									end: getClipSourceEndMs(clip),
+								};
+							}
+						}
+					}
 				}
 
-				const newStart = Math.round(previewSpan.start);
-				const newEnd = Math.round(previewSpan.end);
+				const resolvedNewStart = Math.round(previewSpan.start);
+				const resolvedNewEnd = Math.round(previewSpan.end);
 				const removedSegments = [
-					...(newStart > oldClip.startMs
-						? [{ startMs: oldClip.startMs, endMs: newStart }]
+					...(resolvedNewStart > oldClip.startMs
+						? [{ startMs: oldClip.startMs, endMs: resolvedNewStart }]
 						: []),
-					...(newEnd < oldClip.endMs ? [{ startMs: newEnd, endMs: oldClip.endMs }] : []),
+					...(resolvedNewEnd < oldClip.endMs ? [{ startMs: resolvedNewEnd, endMs: oldClip.endMs }] : []),
 				];
 
-				const startDelta = newStart - oldClip.startMs;
-				const endDelta = newEnd - oldClip.endMs;
+				const startDelta = resolvedNewStart - oldClip.startMs;
+				const endDelta = resolvedNewEnd - oldClip.endMs;
 				const isMove = Math.abs(startDelta - endDelta) < 1 && Math.abs(startDelta) > 0;
 
 				if (isMove) {
@@ -240,7 +265,7 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
 				}
 			}
 
-			return { previewSpans, sourcePreviewSpans, hiddenZoomIds };
+			return { previewSpans, sourcePreviewSpans, hiddenZoomIds, activeResizeId, activeResizeDisplaySpan };
 		}, [clipRegions, liveSpanPreviewById, zoomRegions]);
 		const { shortcuts: keyShortcuts, isMac } = useShortcuts();
 		const { peaks: rawSourceAudioPeaks, loading: sourceAudioLoading } = useTimelineAudioPeaks(
@@ -486,6 +511,8 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
 							showSourceAudioTrack={showSourceAudioTrack}
 							liveSpanPreviewById={liveZoomPreview.previewSpans}
 							liveSourceSpanPreviewById={liveZoomPreview.sourcePreviewSpans}
+							activeResizeId={liveZoomPreview.activeResizeId}
+							activeResizeDisplaySpan={liveZoomPreview.activeResizeDisplaySpan}
 							liveHiddenItemIds={Array.from(liveZoomPreview.hiddenZoomIds)}
 							isLoading={isLoading}
 						/>

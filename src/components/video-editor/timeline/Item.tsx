@@ -34,6 +34,7 @@ interface ItemProps {
 	waveformGain?: number;
 	waveformNormalize?: boolean;
 	muted?: boolean;
+	previewDisplaySpan?: Span;
 	variant?: "zoom" | "trim" | "clip" | "annotation" | "speed" | "audio";
 	isLoading?: boolean;
 	loadingLabel?: string;
@@ -74,6 +75,7 @@ export default function Item({
 	waveformGain = 1,
 	waveformNormalize = false,
 	muted = false,
+	previewDisplaySpan,
 	variant = "zoom",
 	isLoading = false,
 	loadingLabel,
@@ -200,8 +202,8 @@ export default function Item({
 							peaks={waveformPeaks}
 							segmentStartMs={waveformSegmentSpan?.start ?? span.start}
 							segmentEndMs={waveformSegmentSpan?.end ?? span.end}
-							displayStartMs={span.start}
-							displayEndMs={span.end}
+							displayStartMs={previewDisplaySpan?.start ?? span.start}
+							displayEndMs={previewDisplaySpan?.end ?? span.end}
 							gain={waveformGain}
 							normalize={waveformNormalize}
 							className="absolute inset-0 w-full h-full pointer-events-none opacity-70"

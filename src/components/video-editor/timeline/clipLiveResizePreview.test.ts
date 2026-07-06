@@ -16,6 +16,8 @@ describe("resolveClipLiveResizePreview", () => {
 		expect(preview).toEqual({
 			span: { start: 4_000, end: 6_500 },
 			sourceSpan: { start: 4_500, end: 7_000 },
+			rippleDeltaMs: -500,
+			rippleStartMs: 7_000,
 		});
 	});
 
@@ -33,6 +35,8 @@ describe("resolveClipLiveResizePreview", () => {
 		expect(preview).toEqual({
 			span: { start: 4_000, end: 8_000 },
 			sourceSpan: { start: 3_000, end: 7_000 },
+			rippleDeltaMs: 1_000,
+			rippleStartMs: 7_000,
 		});
 	});
 });
