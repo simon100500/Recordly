@@ -125,7 +125,10 @@ function AudioWaveformComponent({
 				ctx.lineTo(px, midY + barHeight);
 			}
 
-			ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
+			// Inherit the clip container's text color so the waveform adapts to
+			// the theme/variant (light pastels get a dark stroke, dark clips white).
+			const strokeColor = getComputedStyle(canvas).color || "rgba(255, 255, 255, 0.8)";
+			ctx.strokeStyle = strokeColor;
 			ctx.lineWidth = dpr;
 			ctx.stroke();
 		};
