@@ -95,7 +95,7 @@ function AudioWaveformComponent({
 			// Bottom-anchored one-sided wave: the waveform is symmetric, so we
 			// render only the lower half growing up from the bottom edge.
 			const baseY = height;
-			const maxBarPx = height * 0.5;
+			const maxBarPx = height * 0.6;
 			ctx.beginPath();
 
 			for (let px = 0; px < width; px++) {

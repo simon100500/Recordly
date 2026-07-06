@@ -1,6 +1,16 @@
 import { Plus } from "@phosphor-icons/react";
 import { useTimelineContext } from "dnd-timeline";
-import { Fragment, type MouseEvent, type MouseEventHandler, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+	Fragment,
+	type MouseEvent,
+	type MouseEventHandler,
+	memo,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import type {
 	SourceAudioTrackSettings,
 	SourceAudioTrackWithPeaks,
@@ -27,7 +37,6 @@ import {
 	TIMELINE_AXIS_HEIGHT_PX,
 } from "../../timelineLayout";
 import TimelineAxis from "../axis/TimelineAxis";
-import ClipMarkerOverlay from "../overlays/ClipMarkerOverlay";
 import PlaybackCursor from "../playhead/PlaybackCursor";
 import { resolvePreviewSourceSpan } from "./timelinePreviewSourceSpan";
 
@@ -220,7 +229,6 @@ function useTimelineHover({
 
 interface TimelineCanvasRowsProps {
 	items: TimelineRenderItem[];
-	videoDurationMs: number;
 	selectAllBlocksActive: boolean;
 	selectedZoomId: string | null;
 	selectedClipId?: string | null;
@@ -290,7 +298,6 @@ function AudioItemWithWaveform({
 
 const TimelineCanvasRows = memo(function TimelineCanvasRows({
 	items,
-	videoDurationMs,
 	selectAllBlocksActive,
 	selectedZoomId,
 	selectedClipId,
@@ -374,7 +381,6 @@ const TimelineCanvasRows = memo(function TimelineCanvasRows({
 	return (
 		<>
 			<Row id={CLIP_ROW_ID} isEmpty={clipItems.length === 0} hint={HINT_CLIP}>
-				<ClipMarkerOverlay videoDurationMs={videoDurationMs} />
 				{clipItems.map((item) => {
 					const isActiveResize = item.id === activeResizeId;
 					// For the active clip we clear previewSpan so the main Item
@@ -398,15 +404,9 @@ const TimelineCanvasRows = memo(function TimelineCanvasRows({
 								onSelectId={onSelectClip}
 								variant="clip"
 								speedValue={item.speedValue}
-								style={
-									isActiveResize
-										? { opacity: 0, zIndex: 1 }
-										: undefined
-								}
+								style={isActiveResize ? { opacity: 0, zIndex: 1 } : undefined}
 								waveformPeaks={
-									isActiveResize
-										? null
-										: (sourceAudioTracks[0]?.peaks ?? null)
+									isActiveResize ? null : (sourceAudioTracks[0]?.peaks ?? null)
 								}
 								waveformSegmentSpan={
 									!isActiveResize && previewSourceSpan
@@ -429,9 +429,7 @@ const TimelineCanvasRows = memo(function TimelineCanvasRows({
 									speedValue={item.speedValue}
 									disabled
 									style={{ pointerEvents: "none", zIndex: 2 }}
-									waveformPeaks={
-										sourceAudioTracks[0]?.peaks ?? null
-									}
+									waveformPeaks={sourceAudioTracks[0]?.peaks ?? null}
 									waveformSegmentSpan={
 										previewSourceSpan ??
 										resolvePreviewSourceSpan(item, undefined)
@@ -473,7 +471,12 @@ const TimelineCanvasRows = memo(function TimelineCanvasRows({
 										waveformPeaks={track.peaks}
 										waveformSegmentSpan={
 											previewSourceSpan ??
-											resolvePreviewSourceSpan(item, isActiveResize ? undefined : liveSpanPreviewById?.[item.id])
+											resolvePreviewSourceSpan(
+												item,
+												isActiveResize
+													? undefined
+													: liveSpanPreviewById?.[item.id],
+											)
 										}
 										waveformGain={Math.max(0, Math.min(1, settings.volume))}
 										waveformNormalize={Boolean(settings.normalize)}
@@ -848,7 +851,6 @@ export default function TimelineCanvas({
 			>
 				<TimelineCanvasRows
 					items={items}
-					videoDurationMs={videoDurationMs}
 					selectAllBlocksActive={selectAllBlocksActive}
 					selectedZoomId={selectedZoomId}
 					selectedClipId={selectedClipId}

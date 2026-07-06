@@ -1,4 +1,4 @@
-import { SpeakerX } from "@phosphor-icons/react";
+import { SpeakerX, MagnifyingGlassPlus as ZoomIn } from "@phosphor-icons/react";
 import type { Span } from "dnd-timeline";
 import { useItem } from "dnd-timeline";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -31,6 +31,15 @@ interface ItemProps {
 	loadingLabel?: string;
 }
 
+const ZOOM_LABELS: Record<number, string> = {
+	1: "1.25×",
+	2: "1.5×",
+	3: "1.8×",
+	4: "2.2×",
+	5: "3.5×",
+	6: "5×",
+};
+
 export default function Item({
 	id,
 	span,
@@ -39,6 +48,7 @@ export default function Item({
 	isSelected = false,
 	onSelect,
 	onSelectId,
+	zoomDepth = 1,
 	waveformPeaks = null,
 	waveformSegmentSpan,
 	waveformGain = 1,
@@ -134,6 +144,7 @@ export default function Item({
 					height: "100%",
 					display: "flex",
 					alignItems: "center",
+					padding: "0 3px",
 				}}
 			>
 				<div
@@ -176,6 +187,14 @@ export default function Item({
 					{isAudio && muted && (
 						<div className="absolute inset-0 z-20 flex items-center justify-center bg-red-900/40 pointer-events-none">
 							<SpeakerX className="w-3 h-3 text-red-300/90 shrink-0" />
+						</div>
+					)}
+					{isZoom && (
+						<div className="relative z-10 flex items-center justify-center gap-1 select-none pointer-events-none">
+							<ZoomIn className="w-3.5 h-3.5 shrink-0" />
+							<span className="text-[11px] font-semibold tracking-tight whitespace-nowrap">
+								{ZOOM_LABELS[zoomDepth] || `${zoomDepth}×`}
+							</span>
 						</div>
 					)}
 				</div>

@@ -6,12 +6,12 @@
  *
  * Light mode (:root:not(.dark) overrides): INVERTED — solid saturated color
  *   fills (the accent becomes the background) with white text/icons and NO
- *   border. Color alone identifies the clip type, so strips stay clean and
- *   minimal. Selection uses a dark OUTER ring (the clip's own -900 shade) so it
- *   reads clearly without eating into the fill (no visual shrink).
+ *   border. Color alone identifies the clip type. Selection uses a dark OUTER
+ *   ring (the clip's own -900 shade) so it reads clearly without shrinking the
+ *   fill.
  *
- * Corners are sharp (3px) for a rigid, modern feel. A small horizontal inset
- * on the clip wrapper creates a gap between adjacent clips (see Item.tsx).
+ * No hover effect on the clips themselves (the resize handles still reveal on
+ * hover — see .glassX:hover .zoomEndCap below). Corners are sharp (3px).
  */
 
 /* ===================== DARK MODE (base) ===================== */
@@ -22,10 +22,6 @@
 	background: #183065;
 	color: rgba(255, 255, 255, 0.92);
 	border: none;
-	transition: background 0.15s ease;
-}
-.glassGreen:hover {
-	background: #1e3d7a;
 }
 .glassGreen.selected {
 	background: #23468a;
@@ -39,10 +35,6 @@
 	background: #652425;
 	color: rgba(255, 255, 255, 0.92);
 	border: none;
-	transition: background 0.15s ease;
-}
-.glassRed:hover {
-	background: #7b292a;
 }
 .glassRed.selected {
 	background: #8b2d2d;
@@ -56,10 +48,6 @@
 	background: #4e4726;
 	color: rgba(255, 255, 255, 0.92);
 	border: none;
-	transition: background 0.15s ease;
-}
-.glassYellow:hover {
-	background: #5f552b;
 }
 .glassYellow.selected {
 	background: #6a5f2f;
@@ -73,10 +61,6 @@
 	background: #67460f;
 	color: rgba(255, 255, 255, 0.92);
 	border: none;
-	transition: background 0.15s ease;
-}
-.glassAmber:hover {
-	background: #7e540f;
 }
 .glassAmber.selected {
 	background: #8e5e0e;
@@ -90,10 +74,6 @@
 	background: #4a2a69;
 	color: rgba(255, 255, 255, 0.92);
 	border: none;
-	transition: background 0.15s ease;
-}
-.glassPurple:hover {
-	background: #593180;
 }
 .glassPurple.selected {
 	background: #643690;
@@ -107,10 +87,6 @@
 	background: #0d1f4a;
 	color: rgba(255, 255, 255, 0.92);
 	border: none;
-	transition: background 0.15s ease;
-}
-.glassCyan:hover {
-	background: #10285e;
 }
 .glassCyan.selected {
 	background: #143072;
@@ -124,10 +100,6 @@
 	background: #164f2d;
 	color: rgba(255, 255, 255, 0.92);
 	border: none;
-	transition: background 0.15s ease;
-}
-.glassDarkGreen:hover {
-	background: #186234;
 }
 .glassDarkGreen.selected {
 	background: #196e3a;
@@ -137,23 +109,18 @@
 
 /* ===================== LIGHT MODE OVERRIDES ===================== */
 /* Inverted: saturated solid fill + white text, no border, sharp corners.
-   -500 shades for the fill (deep enough for white text), -600 on hover.
-   Selected = dark OUTER ring in the clip's own -900 shade (doesn't shrink). */
+   Selected = dark OUTER ring in the clip's own -900 shade (no shrink). */
 
-/* Video / clip — sky */
+/* Video / clip — deep sky blue */
 :global(:root:not(.dark)) .glassCyan {
-	background: #0ea5e9;
+	background: #0369a1;
 	color: #ffffff;
 	border: none;
 	border-radius: 3px;
-	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
-}
-:global(:root:not(.dark)) .glassCyan:hover {
-	background: #0284c7;
-	box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
+	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.1);
 }
 :global(:root:not(.dark)) .glassCyan.selected {
-	background: #0ea5e9;
+	background: #0369a1;
 	box-shadow: 0 0 0 2px #0c4a6e, 0 4px 12px rgba(15, 23, 42, 0.2);
 	z-index: 10;
 }
@@ -164,11 +131,7 @@
 	color: #ffffff;
 	border: none;
 	border-radius: 3px;
-	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
-}
-:global(:root:not(.dark)) .glassDarkGreen:hover {
-	background: #16a34a;
-	box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
+	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.1);
 }
 :global(:root:not(.dark)) .glassDarkGreen.selected {
 	background: #22c55e;
@@ -182,11 +145,7 @@
 	color: #ffffff;
 	border: none;
 	border-radius: 3px;
-	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
-}
-:global(:root:not(.dark)) .glassPurple:hover {
-	background: #9333ea;
-	box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
+	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.1);
 }
 :global(:root:not(.dark)) .glassPurple.selected {
 	background: #a855f7;
@@ -200,11 +159,7 @@
 	color: #ffffff;
 	border: none;
 	border-radius: 3px;
-	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
-}
-:global(:root:not(.dark)) .glassYellow:hover {
-	background: #a16207;
-	box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
+	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.1);
 }
 :global(:root:not(.dark)) .glassYellow.selected {
 	background: #ca8a04;
@@ -218,11 +173,7 @@
 	color: #ffffff;
 	border: none;
 	border-radius: 3px;
-	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
-}
-:global(:root:not(.dark)) .glassRed:hover {
-	background: #dc2626;
-	box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
+	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.1);
 }
 :global(:root:not(.dark)) .glassRed.selected {
 	background: #ef4444;
@@ -236,11 +187,7 @@
 	color: #ffffff;
 	border: none;
 	border-radius: 3px;
-	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
-}
-:global(:root:not(.dark)) .glassAmber:hover {
-	background: #b45309;
-	box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
+	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.1);
 }
 :global(:root:not(.dark)) .glassAmber.selected {
 	background: #d97706;
@@ -248,20 +195,16 @@
 	z-index: 10;
 }
 
-/* Fallback — sky (mirrors clip) */
+/* Fallback — deep sky (mirrors clip) */
 :global(:root:not(.dark)) .glassGreen {
-	background: #0ea5e9;
+	background: #0369a1;
 	color: #ffffff;
 	border: none;
 	border-radius: 3px;
-	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
-}
-:global(:root:not(.dark)) .glassGreen:hover {
-	background: #0284c7;
-	box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
+	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.1);
 }
 :global(:root:not(.dark)) .glassGreen.selected {
-	background: #0ea5e9;
+	background: #0369a1;
 	box-shadow: 0 0 0 2px #0c4a6e, 0 4px 12px rgba(15, 23, 42, 0.2);
 	z-index: 10;
 }
