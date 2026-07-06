@@ -3561,24 +3561,40 @@ export default function VideoEditor() {
 		return getDisplayedTimelineWindowMs(totalMs, trimRegions);
 	}, [duration, trimRegions]);
 
-	const effectiveCursorTelemetry = useMemo(() => {
-		if (!loopCursor) {
+	// Filter out cursor telemetry samples that fall within trimmed regions
+	// so click effects and cursor state don't bleed from removed footage.
+	const cursorTelemetryExcludingTrimRegions = useMemo(() => {
+		if (trimRegions.length === 0 || normalizedCursorTelemetry.length === 0) {
 			return normalizedCursorTelemetry;
+		}
+		return normalizedCursorTelemetry.filter(
+			(sample) =>
+				!trimRegions.some(
+					(trim) => sample.timeMs >= trim.startMs && sample.timeMs <= trim.endMs,
+				),
+		);
+	}, [normalizedCursorTelemetry, trimRegions]);
+
+	const effectiveCursorTelemetry = useMemo(() => {
+		const baseTelemetry = cursorTelemetryExcludingTrimRegions;
+
+		if (!loopCursor) {
+			return baseTelemetry;
 		}
 
 		if (
-			normalizedCursorTelemetry.length < 2 ||
+			baseTelemetry.length < 2 ||
 			displayedTimelineWindow.endMs <= displayedTimelineWindow.startMs
 		) {
-			return normalizedCursorTelemetry;
+			return baseTelemetry;
 		}
 
 		return buildLoopedCursorTelemetry(
-			normalizedCursorTelemetry,
+			baseTelemetry,
 			displayedTimelineWindow.endMs,
 			displayedTimelineWindow.startMs,
 		);
-	}, [loopCursor, normalizedCursorTelemetry, displayedTimelineWindow]);
+	}, [loopCursor, cursorTelemetryExcludingTrimRegions, displayedTimelineWindow]);
 
 	// Initialize a full-track clip when duration is first known
 	const clipInitializedRef = useRef(false);
