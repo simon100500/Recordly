@@ -50,6 +50,7 @@ import {
 	hideUpdateToastWindow,
 	isHudOverlayMousePassthroughSupported,
 	reassertHudOverlayMousePassthrough as reassertHudOverlayMouseState,
+	setHudOverlayMousePassthrough,
 	setHudOverlayRecordingActive,
 	showUpdateToastWindow,
 } from "./windows";
@@ -229,7 +230,9 @@ function showHudOverlayFromTray() {
 	}
 
 	// Disable mouse passthrough so the user can interact with buttons/menus.
-	hud.setIgnoreMouseEvents(false);
+	// This also resets hudOverlayIgnoringMouse so the focus-visible reassert
+	// path (windows.ts:498-508) doesn't re-apply passthrough 50ms later.
+	setHudOverlayMousePassthrough(false);
 
 	if (process.platform === "win32" && isHudOverlayMousePassthroughSupported()) {
 		hud.showInactive();

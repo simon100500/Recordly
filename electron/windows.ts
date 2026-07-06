@@ -276,7 +276,7 @@ function setHudOverlayFallbackExpanded(expanded: boolean) {
 	}
 }
 
-function setHudOverlayMousePassthrough(ignore: boolean) {
+export function setHudOverlayMousePassthrough(ignore: boolean) {
 	hudOverlayIgnoringMouse =
 		hudOverlaySourceSelectionActive && !hudOverlayRecordingActive
 			? true
