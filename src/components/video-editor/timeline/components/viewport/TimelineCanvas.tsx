@@ -1,15 +1,6 @@
 import { Plus } from "@phosphor-icons/react";
 import { useTimelineContext } from "dnd-timeline";
-import {
-	type MouseEvent,
-	type MouseEventHandler,
-	memo,
-	useCallback,
-	useEffect,
-	useMemo,
-	useRef,
-	useState,
-} from "react";
+import { Fragment, type MouseEvent, type MouseEventHandler, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
 	SourceAudioTrackSettings,
 	SourceAudioTrackWithPeaks,
@@ -386,31 +377,70 @@ const TimelineCanvasRows = memo(function TimelineCanvasRows({
 				<ClipMarkerOverlay videoDurationMs={videoDurationMs} />
 				{clipItems.map((item) => {
 					const isActiveResize = item.id === activeResizeId;
-					const previewSpan = isActiveResize
+					// For the active clip we clear previewSpan so the main Item
+					// keeps its original span (avoids dnd-timeline conflict).
+					// For ripple-shifted clips previewSpan comes from liveSpanPreviewById.
+					// For normal clips previewSpan is undefined → falls back to item.span.
+					const effectivePreviewSpan = isActiveResize
 						? undefined
 						: liveSpanPreviewById?.[item.id];
 					const previewSourceSpan = liveSourceSpanPreviewById?.[item.id];
-					const previewDisplaySpan = isActiveResize
-						? (activeResizeDisplaySpan ?? undefined)
-						: undefined;
 					return (
-						<Item
-							id={item.id}
-							key={item.id}
-							rowId={item.rowId}
-							span={previewSpan ?? item.span}
-							isSelected={item.id === selectedClipId}
-							onSelectId={onSelectClip}
-							variant="clip"
-							speedValue={item.speedValue}
-							previewDisplaySpan={previewDisplaySpan}
-							waveformPeaks={sourceAudioTracks[0]?.peaks ?? null}
-							waveformSegmentSpan={
-								previewSourceSpan ?? resolvePreviewSourceSpan(item, previewSpan)
-							}
-						>
-							{item.label}
-						</Item>
+						<Fragment key={item.id}>
+							{/* Main interactive item — handles dnd-timeline resize events.
+							    During resize it's invisible so the correct-positioned
+							    preview overlay shows through. */}
+							<Item
+								id={item.id}
+								rowId={item.rowId}
+								span={effectivePreviewSpan ?? item.span}
+								isSelected={item.id === selectedClipId}
+								onSelectId={onSelectClip}
+								variant="clip"
+								speedValue={item.speedValue}
+								style={
+									isActiveResize
+										? { opacity: 0, zIndex: 1 }
+										: undefined
+								}
+								waveformPeaks={
+									isActiveResize
+										? null
+										: (sourceAudioTracks[0]?.peaks ?? null)
+								}
+								waveformSegmentSpan={
+									!isActiveResize && previewSourceSpan
+										? previewSourceSpan
+										: resolvePreviewSourceSpan(item, effectivePreviewSpan)
+								}
+							>
+								{item.label}
+							</Item>
+							{/* Preview overlay — shows the clip at the correct resolved
+							    position while the invisible main item handles events. */}
+							{isActiveResize && activeResizeDisplaySpan && (
+								<Item
+									id={`preview-${item.id}`}
+									rowId={item.rowId}
+									span={activeResizeDisplaySpan}
+									isSelected={item.id === selectedClipId}
+									onSelectId={onSelectClip}
+									variant="clip"
+									speedValue={item.speedValue}
+									disabled
+									style={{ pointerEvents: "none", zIndex: 2 }}
+									waveformPeaks={
+										sourceAudioTracks[0]?.peaks ?? null
+									}
+									waveformSegmentSpan={
+										previewSourceSpan ??
+										resolvePreviewSourceSpan(item, undefined)
+									}
+								>
+									{item.label}
+								</Item>
+							)}
+						</Fragment>
 					);
 				})}
 			</Row>
@@ -420,7 +450,12 @@ const TimelineCanvasRows = memo(function TimelineCanvasRows({
 						{clipItems
 							.filter((item) => item.showSourceAudio)
 							.map((item) => {
-								const previewSpan = liveSpanPreviewById?.[item.id];
+								const isActiveResize = item.id === activeResizeId;
+								// Source-audio items are disabled (no DnD interaction),
+								// so we can safely pass the correct preview span directly.
+								const effectiveSpan = isActiveResize
+									? (activeResizeDisplaySpan ?? item.span)
+									: (liveSpanPreviewById?.[item.id] ?? item.span);
 								const previewSourceSpan = liveSourceSpanPreviewById?.[item.id];
 								const settings = getSourceAudioTrackSettingsForClip?.(item.id)?.[
 									track.id
@@ -430,7 +465,7 @@ const TimelineCanvasRows = memo(function TimelineCanvasRows({
 										key={`source-audio-${track.id}-${item.id}`}
 										id={`source-audio-${track.id}-${item.id}`}
 										rowId={`${SOURCE_AUDIO_ROW_ID}-${track.id}`}
-										span={previewSpan ?? item.span}
+										span={effectiveSpan}
 										disabled
 										isSelected={item.id === selectedClipId}
 										onSelect={() => onSelectClip?.(item.id)}
@@ -438,7 +473,7 @@ const TimelineCanvasRows = memo(function TimelineCanvasRows({
 										waveformPeaks={track.peaks}
 										waveformSegmentSpan={
 											previewSourceSpan ??
-											resolvePreviewSourceSpan(item, previewSpan)
+											resolvePreviewSourceSpan(item, isActiveResize ? undefined : liveSpanPreviewById?.[item.id])
 										}
 										waveformGain={Math.max(0, Math.min(1, settings.volume))}
 										waveformNormalize={Boolean(settings.normalize)}

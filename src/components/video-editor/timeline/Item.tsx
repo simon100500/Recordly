@@ -35,6 +35,7 @@ interface ItemProps {
 	waveformNormalize?: boolean;
 	muted?: boolean;
 	previewDisplaySpan?: Span;
+	style?: React.CSSProperties;
 	variant?: "zoom" | "trim" | "clip" | "annotation" | "speed" | "audio";
 	isLoading?: boolean;
 	loadingLabel?: string;
@@ -76,6 +77,7 @@ export default function Item({
 	waveformNormalize = false,
 	muted = false,
 	previewDisplaySpan,
+	style: externalStyle,
 	variant = "zoom",
 	isLoading = false,
 	loadingLabel,
@@ -147,6 +149,7 @@ export default function Item({
 	};
 	const safeItemStyle = {
 		...itemStyle,
+		...externalStyle,
 		minWidth: MIN_ITEM_PX,
 		height: "100%",
 		overflow: "hidden",
