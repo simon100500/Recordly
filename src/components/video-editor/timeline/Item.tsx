@@ -1,18 +1,8 @@
-import {
-	FilmSlate as Film,
-	Gauge,
-	ChatCircle as MessageSquare,
-	MusicNotes as Music,
-	Scissors,
-	SpeakerX,
-	MagnifyingGlassPlus as ZoomIn,
-} from "@phosphor-icons/react";
+import { SpeakerX } from "@phosphor-icons/react";
 import type { Span } from "dnd-timeline";
 import { useItem } from "dnd-timeline";
-import { useMemo } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { formatClipSpeedLabel } from "../clipSpeedChange";
 import AudioWaveform from "./components/waveform/AudioWaveform";
 import type { AudioPeaksData } from "./core/timelineTypes";
 import glassStyles from "./ItemGlass.module.css";
@@ -22,7 +12,7 @@ interface ItemProps {
 	span: Span;
 	rowId: string;
 	disabled?: boolean;
-	children: React.ReactNode;
+	children?: React.ReactNode;
 	isSelected?: boolean;
 	onSelect?: () => void;
 	onSelectId?: (id: string) => void;
@@ -41,26 +31,6 @@ interface ItemProps {
 	loadingLabel?: string;
 }
 
-// Map zoom depth to multiplier labels
-const ZOOM_LABELS: Record<number, string> = {
-	1: "1.25×",
-	2: "1.5×",
-	3: "1.8×",
-	4: "2.2×",
-	5: "3.5×",
-	6: "5×",
-};
-
-function formatMs(ms: number): string {
-	const totalSeconds = ms / 1000;
-	const minutes = Math.floor(totalSeconds / 60);
-	const seconds = totalSeconds % 60;
-	if (minutes > 0) {
-		return `${minutes}:${seconds.toFixed(1).padStart(4, "0")}`;
-	}
-	return `${seconds.toFixed(1)}s`;
-}
-
 export default function Item({
 	id,
 	span,
@@ -69,8 +39,6 @@ export default function Item({
 	isSelected = false,
 	onSelect,
 	onSelectId,
-	zoomDepth = 1,
-	speedValue,
 	waveformPeaks = null,
 	waveformSegmentSpan,
 	waveformGain = 1,
@@ -81,7 +49,6 @@ export default function Item({
 	variant = "zoom",
 	isLoading = false,
 	loadingLabel,
-	children,
 }: ItemProps) {
 	const { setNodeRef, attributes, listeners, itemStyle, itemContentStyle } = useItem({
 		id,
@@ -89,11 +56,6 @@ export default function Item({
 		disabled: disabled || isLoading,
 		data: { rowId },
 	});
-
-	const timeLabel = useMemo(
-		() => `${formatMs(span.start)} – ${formatMs(span.end)}`,
-		[span.start, span.end],
-	);
 
 	if (isLoading) {
 		return (
@@ -128,7 +90,6 @@ export default function Item({
 	const isSpeed = variant === "speed";
 	const isAudio = variant === "audio";
 	const showAudioWaveform = (isAudio || isClip) && Boolean(waveformPeaks);
-	const clipSpeedLabel = isClip ? formatClipSpeedLabel(speedValue ?? 1) : null;
 
 	const glassClass = isZoom
 		? glassStyles.glassPurple
@@ -178,7 +139,7 @@ export default function Item({
 				<div
 					className={cn(
 						glassClass,
-						"w-full overflow-hidden flex items-center justify-center gap-1.5 cursor-grab active:cursor-grabbing relative",
+						"w-full overflow-hidden relative cursor-grab active:cursor-grabbing",
 						isSelected && glassStyles.selected,
 					)}
 					style={{
@@ -212,65 +173,11 @@ export default function Item({
 							className="absolute inset-0 w-full h-full pointer-events-none opacity-70"
 						/>
 					)}
-					{/* Muted overlay for source audio track items */}
 					{isAudio && muted && (
-						<div className="absolute inset-0 z-20 flex items-center justify-center gap-1 bg-red-900/40 pointer-events-none">
+						<div className="absolute inset-0 z-20 flex items-center justify-center bg-red-900/40 pointer-events-none">
 							<SpeakerX className="w-3 h-3 text-red-300/90 shrink-0" />
 						</div>
 					)}
-					{/* Content */}
-					<div className="relative z-10 flex flex-col items-center justify-center opacity-90 group-hover:opacity-100 transition-opacity select-none overflow-hidden">
-						<div className="flex items-center gap-1.5">
-							{isZoom ? (
-								<>
-									<ZoomIn className="w-3.5 h-3.5 shrink-0" />
-									<span className="text-[11px] font-semibold tracking-tight whitespace-nowrap">
-										{ZOOM_LABELS[zoomDepth] || `${zoomDepth}×`}
-									</span>
-								</>
-							) : isTrim ? (
-								<>
-									<Scissors className="w-3.5 h-3.5 shrink-0" />
-									<span className="text-[11px] font-semibold tracking-tight whitespace-nowrap">
-										{timeLabel}
-									</span>
-								</>
-							) : isClip ? (
-								<>
-									<Film className="w-3.5 h-3.5 shrink-0" />
-									<span className="text-[11px] font-semibold tracking-tight whitespace-nowrap">
-										{timeLabel}
-									</span>
-									{clipSpeedLabel && (
-										<span className="text-[10px] opacity-70 ml-1">
-											{clipSpeedLabel}
-										</span>
-									)}
-								</>
-							) : isSpeed ? (
-								<>
-									<Gauge className="w-3.5 h-3.5 shrink-0" />
-									<span className="text-[11px] font-semibold tracking-tight whitespace-nowrap">
-										{timeLabel}
-									</span>
-								</>
-							) : isAudio ? (
-								<>
-									<Music className="w-3.5 h-3.5 shrink-0" />
-									<span className="text-[11px] font-semibold tracking-tight whitespace-nowrap">
-										{children}
-									</span>
-								</>
-							) : (
-								<>
-									<MessageSquare className="w-3.5 h-3.5 shrink-0" />
-									<span className="text-[11px] font-semibold tracking-tight whitespace-nowrap">
-										{timeLabel}
-									</span>
-								</>
-							)}
-						</div>
-					</div>
 				</div>
 			</div>
 		</div>

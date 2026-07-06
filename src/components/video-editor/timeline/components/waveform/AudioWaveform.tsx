@@ -92,7 +92,10 @@ function AudioWaveformComponent({
 
 			if (visibleDurationMs <= 0) return;
 
-			const midY = height / 2;
+			// Bottom-anchored one-sided wave: the waveform is symmetric, so we
+			// render only the lower half growing up from the bottom edge.
+			const baseY = height;
+			const maxBarPx = height * 0.5;
 			ctx.beginPath();
 
 			for (let px = 0; px < width; px++) {
@@ -119,14 +122,15 @@ function AudioWaveformComponent({
 				if (normalize) amplitude = Math.sqrt(Math.max(0, amplitude));
 				amplitude = Math.max(0, Math.min(1, amplitude * gain));
 
-				const barHeight = amplitude * midY * 0.85;
+				const barHeight = amplitude * maxBarPx * 0.9;
 
-				ctx.moveTo(px, midY - barHeight);
-				ctx.lineTo(px, midY + barHeight);
+				ctx.moveTo(px, baseY);
+				ctx.lineTo(px, baseY - barHeight);
 			}
 
 			// Inherit the clip container's text color so the waveform adapts to
-			// the theme/variant (light pastels get a dark stroke, dark clips white).
+			// the theme/variant (white on saturated fills in light mode, white on
+			// deep fills in dark mode).
 			const strokeColor = getComputedStyle(canvas).color || "rgba(255, 255, 255, 0.8)";
 			ctx.strokeStyle = strokeColor;
 			ctx.lineWidth = dpr;
