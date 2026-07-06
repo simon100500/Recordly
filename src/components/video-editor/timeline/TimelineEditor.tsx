@@ -1,6 +1,12 @@
-import { Plus } from "@phosphor-icons/react";
+import {
+	ArrowsOutSimple as FitScreen,
+	Plus,
+	MagnifyingGlassPlus as ZoomIn,
+	MagnifyingGlassMinus as ZoomOut,
+} from "@phosphor-icons/react";
 import type { Span } from "dnd-timeline";
 import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
 import type {
 	SourceAudioTrackMeta,
 	SourceAudioTrackSettings,
@@ -19,10 +25,10 @@ import type {
 	ZoomRegion,
 } from "../types";
 import { getClipSourceEndMs } from "../types";
+import { resolveClipLiveResizePreview } from "./clipLiveResizePreview";
 import KeyframeMarkers from "./components/markers/KeyframeMarkers";
 import TimelineCanvas from "./components/viewport/TimelineCanvas";
 import TimelineWrapper from "./components/wrapper/TimelineWrapper";
-import { resolveClipLiveResizePreview } from "./clipLiveResizePreview";
 import { calculateTimelineScale } from "./core/time";
 import type { AudioPeaksData } from "./core/timelineTypes";
 import { useTimelineAudioPeaks } from "./hooks/useTimelineAudioPeaks";
@@ -179,10 +185,12 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
 
 		const timelineContainerRef = useRef<HTMLDivElement>(null);
 		const isTimelineFocusedRef = useRef(false);
-		const { setRange, clampedRange, handleTimelineWheel } = useTimelineRange({
-			totalMs,
-			timelineContainerRef,
-		});
+		const { setRange, clampedRange, handleTimelineWheel, zoomByFactor, fitToScreen } =
+			useTimelineRange({
+				totalMs,
+				minVisibleRangeMs: timelineScale.minVisibleRangeMs,
+				timelineContainerRef,
+			});
 
 		const [liveSpanPreviewById, setLiveSpanPreviewById] = useState<Record<string, Span>>({});
 		const liveZoomPreview = useMemo(() => {
@@ -214,7 +222,10 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
 					// Ripple: add shifted spans for following clips
 					if (clipPreview.rippleDeltaMs !== 0 && clipPreview.rippleStartMs !== null) {
 						for (const clip of clipRegions) {
-							if (clip.id !== previewId && clip.startMs >= clipPreview.rippleStartMs) {
+							if (
+								clip.id !== previewId &&
+								clip.startMs >= clipPreview.rippleStartMs
+							) {
 								previewSpans[clip.id] = {
 									start: clip.startMs + clipPreview.rippleDeltaMs,
 									end: clip.endMs + clipPreview.rippleDeltaMs,
@@ -234,7 +245,9 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
 					...(resolvedNewStart > oldClip.startMs
 						? [{ startMs: oldClip.startMs, endMs: resolvedNewStart }]
 						: []),
-					...(resolvedNewEnd < oldClip.endMs ? [{ startMs: resolvedNewEnd, endMs: oldClip.endMs }] : []),
+					...(resolvedNewEnd < oldClip.endMs
+						? [{ startMs: resolvedNewEnd, endMs: oldClip.endMs }]
+						: []),
 				];
 
 				const startDelta = resolvedNewStart - oldClip.startMs;
@@ -265,7 +278,13 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
 				}
 			}
 
-			return { previewSpans, sourcePreviewSpans, hiddenZoomIds, activeResizeId, activeResizeDisplaySpan };
+			return {
+				previewSpans,
+				sourcePreviewSpans,
+				hiddenZoomIds,
+				activeResizeId,
+				activeResizeDisplaySpan,
+			};
 		}, [clipRegions, liveSpanPreviewById, zoomRegions]);
 		const { shortcuts: keyShortcuts, isMac } = useShortcuts();
 		const { peaks: rawSourceAudioPeaks, loading: sourceAudioLoading } = useTimelineAudioPeaks(
@@ -429,10 +448,10 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
 		}
 
 		return (
-			<div className="flex-1 min-h-0 flex flex-col bg-editor-bg overflow-hidden">
+			<div className="flex-1 min-h-0 flex flex-col bg-editor-bg overflow-hidden relative">
 				<div
 					ref={timelineContainerRef}
-					className="flex-1 min-h-0 overflow-auto bg-editor-bg relative"
+					className="flex-1 min-h-0 overflow-auto bg-editor-bg"
 					tabIndex={0}
 					onFocus={() => {
 						isTimelineFocusedRef.current = true;
@@ -517,6 +536,38 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
 							isLoading={isLoading}
 						/>
 					</TimelineWrapper>
+				</div>
+				<div className="absolute bottom-3 right-3 z-[55] flex items-center gap-0.5 rounded-lg border border-foreground/10 bg-editor-panel/95 p-1 shadow-lg backdrop-blur">
+					<Button
+						onClick={() => zoomByFactor(1.4)}
+						variant="ghost"
+						size="icon"
+						className="h-7 w-7 text-muted-foreground hover:text-[#2563EB] hover:bg-[#2563EB]/10"
+						title="Zoom out"
+						aria-label="Zoom out"
+					>
+						<ZoomOut className="w-4 h-4" />
+					</Button>
+					<Button
+						onClick={fitToScreen}
+						variant="ghost"
+						size="icon"
+						className="h-7 w-7 text-muted-foreground hover:text-[#2563EB] hover:bg-[#2563EB]/10"
+						title="Fit to screen"
+						aria-label="Fit to screen"
+					>
+						<FitScreen className="w-4 h-4" />
+					</Button>
+					<Button
+						onClick={() => zoomByFactor(1 / 1.4)}
+						variant="ghost"
+						size="icon"
+						className="h-7 w-7 text-muted-foreground hover:text-[#2563EB] hover:bg-[#2563EB]/10"
+						title="Zoom in"
+						aria-label="Zoom in"
+					>
+						<ZoomIn className="w-4 h-4" />
+					</Button>
 				</div>
 			</div>
 		);

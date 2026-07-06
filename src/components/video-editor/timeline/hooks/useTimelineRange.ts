@@ -12,6 +12,7 @@ import { createInitialRange, normalizeWheelDeltaToPixels } from "../core/time";
 
 interface UseTimelineRangeParams {
 	totalMs: number;
+	minVisibleRangeMs: number;
 	timelineContainerRef: RefObject<HTMLDivElement>;
 }
 
@@ -79,7 +80,11 @@ export function resolveRangeAfterTotalMsChange({
 	return { start, end: start + visibleSpan };
 }
 
-export function useTimelineRange({ totalMs, timelineContainerRef }: UseTimelineRangeParams) {
+export function useTimelineRange({
+	totalMs,
+	minVisibleRangeMs,
+	timelineContainerRef,
+}: UseTimelineRangeParams) {
 	const [range, setRange] = useState<Range>(() => createInitialRange(totalMs));
 	const previousTotalMsRef = useRef(totalMs);
 
@@ -158,10 +163,36 @@ export function useTimelineRange({ totalMs, timelineContainerRef }: UseTimelineR
 		[clampedRange.end, clampedRange.start, panTimelineRange, timelineContainerRef, totalMs],
 	);
 
+	const fitToScreen = useCallback(() => {
+		if (totalMs <= 0) return;
+		setRange({ start: 0, end: totalMs });
+	}, [totalMs]);
+
+	// factor < 1 zooms in (smaller visible span), factor > 1 zooms out (wider).
+	// Anchored at the center of the visible range; clamped to [0, totalMs] and
+	// the minimum visible span so it always stays valid in both directions.
+	const zoomByFactor = useCallback(
+		(factor: number) => {
+			if (totalMs <= 0) return;
+			setRange((previous) => {
+				const span = Math.max(1, previous.end - previous.start);
+				const newSpan = Math.max(minVisibleRangeMs, Math.min(totalMs, span * factor));
+				if (Math.abs(newSpan - span) < 0.5) return previous;
+				const center = previous.start + span / 2;
+				const maxStart = Math.max(0, totalMs - newSpan);
+				const start = Math.max(0, Math.min(center - newSpan / 2, maxStart));
+				return { start, end: start + newSpan };
+			});
+		},
+		[minVisibleRangeMs, totalMs],
+	);
+
 	return {
 		range,
 		setRange,
 		clampedRange,
 		handleTimelineWheel,
+		zoomByFactor,
+		fitToScreen,
 	};
 }

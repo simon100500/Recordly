@@ -4,14 +4,11 @@
  * Dark mode (base classes): deep saturated fills with an inset accent ring on
  *   selection.
  *
- * Light mode (:root:not(.dark) overrides): INVERTED — solid saturated color
- *   fills (the accent becomes the background) with white text/icons and NO
- *   border. Color alone identifies the clip type. Selection uses a dark OUTER
- *   ring (the clip's own -900 shade) so it reads clearly without shrinking the
- *   fill.
- *
- * No hover effect on the clips themselves (the resize handles still reveal on
- * hover — see .glassX:hover .zoomEndCap below). Corners are sharp (3px).
+ * Light mode (:root:not(.dark) overrides): a flat, slightly lo-fi palette.
+ *   Solid matte fills, white text/icons, no border, no resting shadow (true
+ *   flat UI). The blue (video) is a saturated dark blue; the purple (zoom) is
+ *   muted/dusty; the rest are toned-down earthy versions of their hues.
+ *   Selection = a dark OUTER ring (no fill change, no shrink).
  */
 
 /* ===================== DARK MODE (base) ===================== */
@@ -108,104 +105,97 @@
 }
 
 /* ===================== LIGHT MODE OVERRIDES ===================== */
-/* Inverted: saturated solid fill + white text, no border, sharp corners.
-   Selected = dark OUTER ring in the clip's own -900 shade (no shrink). */
+/* Flat lo-fi palette: matte solid fills, white text, no border, no resting
+   shadow. Selected = dark OUTER ring (clip doesn't shrink). */
 
-/* Video / clip — deep sky blue */
+/* Video / clip — saturated dark blue */
 :global(:root:not(.dark)) .glassCyan {
-	background: #0369a1;
+	background: #1e40af;
 	color: #ffffff;
 	border: none;
 	border-radius: 3px;
-	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.1);
 }
 :global(:root:not(.dark)) .glassCyan.selected {
-	background: #0369a1;
-	box-shadow: 0 0 0 2px #0c4a6e, 0 4px 12px rgba(15, 23, 42, 0.2);
+	background: #1e40af;
+	box-shadow: 0 0 0 2px #172554;
 	z-index: 10;
 }
 
-/* Audio — green */
-:global(:root:not(.dark)) .glassDarkGreen {
-	background: #22c55e;
-	color: #ffffff;
-	border: none;
-	border-radius: 3px;
-	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.1);
-}
-:global(:root:not(.dark)) .glassDarkGreen.selected {
-	background: #22c55e;
-	box-shadow: 0 0 0 2px #14532d, 0 4px 12px rgba(15, 23, 42, 0.2);
-	z-index: 10;
-}
-
-/* Zoom — violet */
+/* Zoom — muted purple (clean, not muddy) */
 :global(:root:not(.dark)) .glassPurple {
-	background: #a855f7;
+	background: #7c5cb0;
 	color: #ffffff;
 	border: none;
 	border-radius: 3px;
-	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.1);
 }
 :global(:root:not(.dark)) .glassPurple.selected {
-	background: #a855f7;
-	box-shadow: 0 0 0 2px #581c87, 0 4px 12px rgba(15, 23, 42, 0.2);
+	background: #7c5cb0;
+	box-shadow: 0 0 0 2px #3a2a5c;
 	z-index: 10;
 }
 
-/* Annotation — yellow (deepened for white-text contrast) */
-:global(:root:not(.dark)) .glassYellow {
-	background: #ca8a04;
+/* Audio — muted forest green */
+:global(:root:not(.dark)) .glassDarkGreen {
+	background: #3f7d5c;
 	color: #ffffff;
 	border: none;
 	border-radius: 3px;
-	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.1);
+}
+:global(:root:not(.dark)) .glassDarkGreen.selected {
+	background: #3f7d5c;
+	box-shadow: 0 0 0 2px #1a3526;
+	z-index: 10;
+}
+
+/* Annotation — muted ochre */
+:global(:root:not(.dark)) .glassYellow {
+	background: #9a7b34;
+	color: #ffffff;
+	border: none;
+	border-radius: 3px;
 }
 :global(:root:not(.dark)) .glassYellow.selected {
-	background: #ca8a04;
-	box-shadow: 0 0 0 2px #713f12, 0 4px 12px rgba(15, 23, 42, 0.2);
+	background: #9a7b34;
+	box-shadow: 0 0 0 2px #3d2f10;
 	z-index: 10;
 }
 
-/* Trim — red */
+/* Trim — muted brick red */
 :global(:root:not(.dark)) .glassRed {
-	background: #ef4444;
+	background: #a8453f;
 	color: #ffffff;
 	border: none;
 	border-radius: 3px;
-	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.1);
 }
 :global(:root:not(.dark)) .glassRed.selected {
-	background: #ef4444;
-	box-shadow: 0 0 0 2px #7f1d1d, 0 4px 12px rgba(15, 23, 42, 0.2);
+	background: #a8453f;
+	box-shadow: 0 0 0 2px #451a17;
 	z-index: 10;
 }
 
-/* Speed — amber (deepened for white-text contrast) */
+/* Speed — muted copper */
 :global(:root:not(.dark)) .glassAmber {
-	background: #d97706;
+	background: #a8662e;
 	color: #ffffff;
 	border: none;
 	border-radius: 3px;
-	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.1);
 }
 :global(:root:not(.dark)) .glassAmber.selected {
-	background: #d97706;
-	box-shadow: 0 0 0 2px #78350f, 0 4px 12px rgba(15, 23, 42, 0.2);
+	background: #a8662e;
+	box-shadow: 0 0 0 2px #3d2310;
 	z-index: 10;
 }
 
-/* Fallback — deep sky (mirrors clip) */
+/* Fallback — saturated dark blue (mirrors clip) */
 :global(:root:not(.dark)) .glassGreen {
-	background: #0369a1;
+	background: #1e40af;
 	color: #ffffff;
 	border: none;
 	border-radius: 3px;
-	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.1);
 }
 :global(:root:not(.dark)) .glassGreen.selected {
-	background: #0369a1;
-	box-shadow: 0 0 0 2px #0c4a6e, 0 4px 12px rgba(15, 23, 42, 0.2);
+	background: #1e40af;
+	box-shadow: 0 0 0 2px #172554;
 	z-index: 10;
 }
 

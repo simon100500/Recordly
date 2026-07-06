@@ -24,7 +24,6 @@ interface ItemProps {
 	waveformGain?: number;
 	waveformNormalize?: boolean;
 	muted?: boolean;
-	previewDisplaySpan?: Span;
 	style?: React.CSSProperties;
 	variant?: "zoom" | "trim" | "clip" | "annotation" | "speed" | "audio";
 	isLoading?: boolean;
@@ -54,7 +53,6 @@ export default function Item({
 	waveformGain = 1,
 	waveformNormalize = false,
 	muted = false,
-	previewDisplaySpan,
 	style: externalStyle,
 	variant = "zoom",
 	isLoading = false,
@@ -177,8 +175,6 @@ export default function Item({
 							peaks={waveformPeaks}
 							segmentStartMs={waveformSegmentSpan?.start ?? span.start}
 							segmentEndMs={waveformSegmentSpan?.end ?? span.end}
-							displayStartMs={previewDisplaySpan?.start ?? span.start}
-							displayEndMs={previewDisplaySpan?.end ?? span.end}
 							gain={waveformGain}
 							normalize={waveformNormalize}
 							className="absolute inset-0 w-full h-full pointer-events-none opacity-70"
