@@ -9,6 +9,7 @@ import {
 	type WheelEvent,
 } from "react";
 import { createInitialRange, normalizeWheelDeltaToPixels } from "../core/time";
+import { clampRange } from "../dnd/engine";
 
 interface UseTimelineRangeParams {
 	totalMs: number;
@@ -105,11 +106,8 @@ export function useTimelineRange({
 		if (totalMs === 0) {
 			return range;
 		}
-		return {
-			start: Math.max(0, Math.min(range.start, totalMs)),
-			end: Math.min(range.end, totalMs),
-		};
-	}, [range, totalMs]);
+		return clampRange(range, { totalMs, minVisibleRangeMs });
+	}, [range, totalMs, minVisibleRangeMs]);
 
 	const panTimelineRange = useCallback(
 		(deltaMs: number) => {
@@ -169,18 +167,18 @@ export function useTimelineRange({
 	}, [totalMs]);
 
 	// factor < 1 zooms in (smaller visible span), factor > 1 zooms out (wider).
-	// Anchored at the center of the visible range; clamped to [0, totalMs] and
-	// the minimum visible span so it always stays valid in both directions.
+	// Anchored at the center of the visible range and allowed to exceed the
+	// content duration (up to 2x) so the user can pull below "fit to screen".
 	const zoomByFactor = useCallback(
 		(factor: number) => {
 			if (totalMs <= 0) return;
 			setRange((previous) => {
 				const span = Math.max(1, previous.end - previous.start);
-				const newSpan = Math.max(minVisibleRangeMs, Math.min(totalMs, span * factor));
+				const maxSpan = totalMs * 2;
+				const newSpan = Math.max(minVisibleRangeMs, Math.min(maxSpan, span * factor));
 				if (Math.abs(newSpan - span) < 0.5) return previous;
 				const center = previous.start + span / 2;
-				const maxStart = Math.max(0, totalMs - newSpan);
-				const start = Math.max(0, Math.min(center - newSpan / 2, maxStart));
+				const start = center - newSpan / 2;
 				return { start, end: start + newSpan };
 			});
 		},

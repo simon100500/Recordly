@@ -43,21 +43,23 @@ export function clampRange(
 		return { start, end: start + span };
 	}
 
-	const rawStart = Math.max(0, candidate.start);
-	const rawEnd = candidate.end;
-	const clampedEnd = Math.min(rawEnd, totalMs);
+	// Allow zooming out up to 2x the content duration so the user can pull the
+	// scale below "fit to screen" (the video shrinks, with empty space around).
+	const maxSpan = totalMs * 2;
 	const minSpan = Math.min(Math.max(minVisibleRangeMs, 1), totalMs);
-	const desiredSpan = clampedEnd - rawStart;
-	const span = Math.min(Math.max(desiredSpan, minSpan), totalMs);
+	const span = Math.min(Math.max(candidate.end - candidate.start, minSpan), maxSpan);
 
-	let finalStart = rawStart;
-	let finalEnd = finalStart + span;
-	if (finalEnd > totalMs) {
-		finalEnd = totalMs;
-		finalStart = Math.max(0, finalEnd - span);
+	if (span >= totalMs) {
+		// Zoomed out at/beyond the whole content: keep [0, totalMs] fully
+		// visible and allow panning within the slack (start ∈ [totalMs-span, 0]).
+		const rawStart = Number.isFinite(candidate.start) ? candidate.start : 0;
+		const start = Math.max(totalMs - span, Math.min(rawStart, 0));
+		return { start, end: start + span };
 	}
 
-	return { start: finalStart, end: finalEnd };
+	// Normal zoom: keep the window inside [0, totalMs].
+	const start = Math.max(0, Math.min(candidate.start, totalMs - span));
+	return { start, end: start + span };
 }
 
 export function getSiblingSpans(
