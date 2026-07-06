@@ -6,6 +6,7 @@ import {
 	Crop,
 	Cursor,
 	DownloadSimple as Download,
+	FloppyDisk,
 	FolderOpen,
 	Gear,
 	Pause,
@@ -5891,6 +5892,17 @@ export default function VideoEditor() {
 					</Button>
 					<DiscordLinkButton />
 					<FeedbackDialog />
+					<Button
+						type="button"
+						variant="ghost"
+						size="sm"
+						onClick={handleSaveProject}
+						className={APP_HEADER_ICON_BUTTON_CLASS}
+						title={t("editor.project.save", "Save project")}
+						aria-label={t("editor.project.save", "Save project")}
+					>
+						<FloppyDisk className="h-4 w-4" />
+					</Button>
 					<div className="ml-1 h-5 w-px bg-foreground/10" />
 					<Button
 						type="button"
