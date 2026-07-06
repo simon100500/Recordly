@@ -43,11 +43,26 @@ interface TimelineAudioPeaksOptions {
 	enableSourceSidecarFallback?: boolean;
 	fallbackResources?: string[];
 	peakCount?: number;
+	refreshKey?: number;
 }
 
 export interface TimelineAudioPeaksResult {
 	peaks: AudioPeaksData | null;
 	loading: boolean;
+}
+
+export function appendWaveformRefreshToken(resourceUrl: string, refreshKey: number): string {
+	if (!Number.isFinite(refreshKey) || refreshKey <= 0) {
+		return resourceUrl;
+	}
+
+	try {
+		const url = new URL(resourceUrl);
+		url.searchParams.set("recordlyWaveformRefresh", String(Math.round(refreshKey)));
+		return url.toString();
+	} catch {
+		return resourceUrl;
+	}
 }
 
 export function useTimelineAudioPeaks(
@@ -60,6 +75,7 @@ export function useTimelineAudioPeaks(
 	const enableSourceSidecarFallback = options.enableSourceSidecarFallback ?? false;
 	const fallbackResources = options.fallbackResources ?? EMPTY_FALLBACK_RESOURCES;
 	const peakCount = options.peakCount ?? WAVEFORM_DEFAULT_PEAK_COUNT;
+	const refreshKey = options.refreshKey ?? 0;
 
 	useEffect(() => {
 		sourceRef.current = mediaResource;
@@ -75,7 +91,10 @@ export function useTimelineAudioPeaks(
 		const run = async () => {
 			const tryGenerate = async (resource: string): Promise<AudioPeaksData> => {
 				const resolvedUrl = await resolveMediaResourceUrl(resource);
-				return waveformGenerator.generate(resolvedUrl, peakCount);
+				return waveformGenerator.generate(
+					appendWaveformRefreshToken(resolvedUrl, refreshKey),
+					peakCount,
+				);
 			};
 
 			try {
@@ -121,7 +140,10 @@ export function useTimelineAudioPeaks(
 					}
 					return;
 				} catch (error) {
-					console.warn(`[useTimelineAudioPeaks] Sidecar candidate failed: ${candidate}`, error);
+					console.warn(
+						`[useTimelineAudioPeaks] Sidecar candidate failed: ${candidate}`,
+						error,
+					);
 				}
 			}
 
@@ -135,7 +157,7 @@ export function useTimelineAudioPeaks(
 		return () => {
 			cancelled = true;
 		};
-	}, [mediaResource, enableSourceSidecarFallback, fallbackResources, peakCount]);
+	}, [mediaResource, enableSourceSidecarFallback, fallbackResources, peakCount, refreshKey]);
 
 	return { peaks, loading };
 }

@@ -61,6 +61,17 @@ export function resolveClipSpanChange(params: {
 			newEnd = Math.max(newStart, oldClip.endMs - timelineTrimDeltaMs);
 			rippleDeltaMs = newEnd - oldClip.endMs;
 			rippleStartMs = oldClip.endMs;
+		} else if (rawStart < leftAnchorMs) {
+			const speed = Number.isFinite(oldClip.speed) && oldClip.speed > 0 ? oldClip.speed : 1;
+			const oldSourceStartMs = oldClip.sourceStartMs ?? oldClip.startMs;
+			const requestedSourceStartMs = oldSourceStartMs + (rawStart - oldClip.startMs) * speed;
+			const nextSourceStartMs = Math.max(0, Math.round(requestedSourceStartMs));
+			const revealedTimelineMs = Math.round((oldSourceStartMs - nextSourceStartMs) / speed);
+			const gapFillMs = oldClip.startMs - leftAnchorMs;
+			const timelineGrowthMs = Math.max(0, revealedTimelineMs - gapFillMs);
+			newEnd = oldClip.endMs + timelineGrowthMs;
+			rippleDeltaMs = timelineGrowthMs;
+			rippleStartMs = oldClip.endMs;
 		}
 	} else if (
 		isBodyDrag &&
@@ -85,11 +96,13 @@ export function resolveClipSpanChange(params: {
 		rippleStartMs = oldClip.endMs;
 	}
 
-	const sourceStartDelta = isLeftEdge
-		? rawStart > oldClip.startMs
+	const leftSourceStartDelta =
+		rawStart > oldClip.startMs
 			? rawStart - oldClip.startMs
-			: newStart - oldClip.startMs
-		: newStart - oldClip.startMs;
+			: rawStart < newStart
+				? rawStart - oldClip.startMs
+				: newStart - oldClip.startMs;
+	const sourceStartDelta = isLeftEdge ? leftSourceStartDelta : newStart - oldClip.startMs;
 	let newSourceStartMs = oldClip.sourceStartMs ?? oldClip.startMs;
 	if (isLeftEdge) {
 		const speed = Number.isFinite(oldClip.speed) && oldClip.speed > 0 ? oldClip.speed : 1;

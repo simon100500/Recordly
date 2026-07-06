@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { deriveNextId } from "./projectPersistence";
 
 import {
+	clipsToTrims,
 	extendAutoFullTrackClip,
 	findClipAtTimelineTime,
 	getTimelineDurationMs,
@@ -135,6 +136,18 @@ describe("clip timeline mapping", () => {
 		expect(mapSourceTimeToTimelineTime(8_000, clips)).toBe(7_000);
 	});
 
+	it("keeps playhead mapping stable after a right-edge ripple extension", () => {
+		const rippleExtendedClips = [
+			{ id: "clip-1", startMs: 0, endMs: 5_500, speed: 1, sourceStartMs: 0 },
+			{ id: "clip-2", startMs: 5_500, endMs: 8_500, speed: 1, sourceStartMs: 4_000 },
+		];
+
+		expect(mapTimelineTimeToSourceTime(5_250, rippleExtendedClips)).toBe(5_250);
+		expect(mapTimelineTimeToSourceTime(5_750, rippleExtendedClips)).toBe(4_250);
+		expect(mapSourceTimeToTimelineTime(4_250, rippleExtendedClips)).toBe(4_250);
+		expect(mapSourceTimeToTimelineTime(4_250, rippleExtendedClips, 5_750)).toBe(5_750);
+	});
+
 	it("snaps removed source gaps to the nearest kept boundary", () => {
 		expect(mapSourceTimeToTimelineTime(4_200, clips)).toBe(4_000);
 		expect(mapSourceTimeToTimelineTime(5_900, clips)).toBe(6_000);
@@ -155,7 +168,24 @@ describe("clip timeline mapping", () => {
 		);
 
 		expect(clipsFromTrims.map((clip) => clip.id)).toEqual(["clip-1", "clip-2", "clip-3"]);
-		expect(deriveNextId("clip", clipsFromTrims.map((clip) => clip.id))).toBe(4);
+		expect(
+			deriveNextId(
+				"clip",
+				clipsFromTrims.map((clip) => clip.id),
+			),
+		).toBe(4);
+	});
+
+	it("does not trim source frames still covered by an earlier overlapping clip", () => {
+		const trims = clipsToTrims(
+			[
+				{ id: "clip-1", startMs: 0, endMs: 8_000, speed: 1, sourceStartMs: 0 },
+				{ id: "clip-2", startMs: 8_000, endMs: 11_000, speed: 1, sourceStartMs: 4_000 },
+			],
+			10_000,
+		);
+
+		expect(trims).toEqual([{ id: "trim-gap-1", startMs: 8_000, endMs: 10_000 }]);
 	});
 });
 
@@ -171,10 +201,7 @@ describe("getTimelineDurationMs", () => {
 
 	it("keeps the source duration when speed edits make clips shorter", () => {
 		expect(
-			getTimelineDurationMs(
-				[{ id: "clip-1", startMs: 0, endMs: 5_000, speed: 2 }],
-				10_000,
-			),
+			getTimelineDurationMs([{ id: "clip-1", startMs: 0, endMs: 5_000, speed: 2 }], 10_000),
 		).toBe(10_000);
 	});
 });

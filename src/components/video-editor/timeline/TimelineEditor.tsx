@@ -21,6 +21,7 @@ import type {
 import KeyframeMarkers from "./components/markers/KeyframeMarkers";
 import TimelineCanvas from "./components/viewport/TimelineCanvas";
 import TimelineWrapper from "./components/wrapper/TimelineWrapper";
+import { resolveClipLiveResizePreview } from "./clipLiveResizePreview";
 import { calculateTimelineScale } from "./core/time";
 import type { AudioPeaksData } from "./core/timelineTypes";
 import { useTimelineAudioPeaks } from "./hooks/useTimelineAudioPeaks";
@@ -71,6 +72,7 @@ export interface TimelineEditorProps {
 	onSelectAudio?: (id: string | null) => void;
 	videoPath?: string | null;
 	videoSourcePath?: string | null;
+	sourceAudioRefreshKey?: number;
 	cursorTelemetrySourcePath?: string | null;
 	showSourceAudioTrack?: boolean;
 	onSourceAudioAvailabilityChange?: (available: boolean) => void;
@@ -146,6 +148,7 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
 			onSelectAudio,
 			videoPath,
 			videoSourcePath,
+			sourceAudioRefreshKey = 0,
 			cursorTelemetrySourcePath,
 			showSourceAudioTrack = false,
 			onSourceAudioAvailabilityChange,
@@ -183,11 +186,22 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
 		const [liveSpanPreviewById, setLiveSpanPreviewById] = useState<Record<string, Span>>({});
 		const liveZoomPreview = useMemo(() => {
 			const previewSpans: Record<string, Span> = { ...liveSpanPreviewById };
+			const sourcePreviewSpans: Record<string, Span> = {};
 			const hiddenZoomIds = new Set<string>();
 
-			for (const [previewId, previewSpan] of Object.entries(liveSpanPreviewById)) {
+			for (const [previewId, rawPreviewSpan] of Object.entries(liveSpanPreviewById)) {
 				const oldClip = clipRegions.find((clip) => clip.id === previewId);
 				if (!oldClip) continue;
+				const clipPreview = resolveClipLiveResizePreview(
+					clipRegions,
+					previewId,
+					rawPreviewSpan,
+				);
+				const previewSpan = clipPreview?.span ?? rawPreviewSpan;
+				if (clipPreview) {
+					previewSpans[previewId] = clipPreview.span;
+					sourcePreviewSpans[previewId] = clipPreview.sourceSpan;
+				}
 
 				const newStart = Math.round(previewSpan.start);
 				const newEnd = Math.round(previewSpan.end);
@@ -226,11 +240,13 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
 				}
 			}
 
-			return { previewSpans, hiddenZoomIds };
+			return { previewSpans, sourcePreviewSpans, hiddenZoomIds };
 		}, [clipRegions, liveSpanPreviewById, zoomRegions]);
 		const { shortcuts: keyShortcuts, isMac } = useShortcuts();
-		const { peaks: rawSourceAudioPeaks, loading: sourceAudioLoading } =
-			useTimelineAudioPeaks(videoPath);
+		const { peaks: rawSourceAudioPeaks, loading: sourceAudioLoading } = useTimelineAudioPeaks(
+			videoPath,
+			{ refreshKey: sourceAudioRefreshKey },
+		);
 		const localSourcePath = useMemo(() => {
 			if (!videoPath) return null;
 			return (
@@ -254,12 +270,13 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
 		);
 		const { peaks: micSidecarPeaks, loading: micSidecarLoading } = useTimelineAudioPeaks(
 			micSidecarPaths[0] ?? null,
-			{ fallbackResources: micSidecarFallbackPaths },
+			{ fallbackResources: micSidecarFallbackPaths, refreshKey: sourceAudioRefreshKey },
 		);
 		const { peaks: systemSidecarPeaks, loading: systemSidecarLoading } = useTimelineAudioPeaks(
 			systemSidecarPaths[0] ?? null,
 			{
 				fallbackResources: systemSidecarFallbackPaths,
+				refreshKey: sourceAudioRefreshKey,
 			},
 		);
 		const sourceAudioTracks = useMemo(
@@ -468,6 +485,7 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
 							getSourceAudioTrackSettingsForClip={getSourceAudioTrackSettingsForClip}
 							showSourceAudioTrack={showSourceAudioTrack}
 							liveSpanPreviewById={liveZoomPreview.previewSpans}
+							liveSourceSpanPreviewById={liveZoomPreview.sourcePreviewSpans}
 							liveHiddenItemIds={Array.from(liveZoomPreview.hiddenZoomIds)}
 							isLoading={isLoading}
 						/>

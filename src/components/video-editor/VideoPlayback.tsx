@@ -37,6 +37,7 @@ import {
 	type AnnotationRegion,
 	type AutoCaptionSettings,
 	type CaptionCue,
+	type ClipRegion,
 	type CursorClickEffectStyle,
 	type CursorStyle,
 	type Padding,
@@ -158,6 +159,7 @@ import {
 	DEFAULT_ZOOM_OUT_DURATION_MS,
 	DEFAULT_ZOOM_OUT_EASING,
 	getDefaultCaptionFontFamily,
+	getClipSourceEndMs,
 } from "./types";
 import {
 	type CursorFollowCameraState,
@@ -171,7 +173,10 @@ import {
 	layoutVideoContent as layoutVideoContentUtil,
 } from "./videoPlayback/layoutUtils";
 import { updateOverlayIndicator } from "./videoPlayback/overlayUtils";
-import { createVideoEventHandlers } from "./videoPlayback/videoEventHandlers";
+import {
+	createVideoEventHandlers,
+	type PlaybackTimelineSegment,
+} from "./videoPlayback/videoEventHandlers";
 import {
 	getWebcamMediaTargetTimeSeconds,
 	shouldSeekWebcamMedia,
@@ -376,8 +381,10 @@ interface VideoPlaybackProps {
 	cropRegion?: import("./types").CropRegion;
 	webcam?: WebcamOverlaySettings;
 	webcamVideoPath?: string | null;
+	clipRegions?: ClipRegion[];
 	trimRegions?: TrimRegion[];
 	speedRegions?: SpeedRegion[];
+	timelineTime?: number;
 	aspectRatio: AspectRatio;
 	annotationRegions?: AnnotationRegion[];
 	autoCaptions?: CaptionCue[];
@@ -460,8 +467,10 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			cropRegion,
 			webcam,
 			webcamVideoPath,
+			clipRegions = [],
 			trimRegions = [],
 			speedRegions = [],
+			timelineTime = currentTime,
 			aspectRatio,
 			annotationRegions = [],
 			autoCaptions = [],
@@ -606,6 +615,8 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		const layoutVideoContentRef = useRef<(() => void) | null>(null);
 		const trimRegionsRef = useRef<TrimRegion[]>([]);
 		const speedRegionsRef = useRef<SpeedRegion[]>([]);
+		const timelineSegmentsRef = useRef<PlaybackTimelineSegment[]>([]);
+		const timelineTimeRef = useRef(0);
 		const lastWebcamSyncTimeRef = useRef<number | null>(null);
 		const lastBackgroundSyncTimeRef = useRef<number | null>(null);
 		const bgVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -1673,6 +1684,37 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			speedRegionsRef.current = speedRegions;
 		}, [speedRegions]);
 
+		const playbackTimelineSegments = useMemo<PlaybackTimelineSegment[]>(
+			() =>
+				clipRegions
+					.map((clip) => {
+						const speed = Number.isFinite(clip.speed) && clip.speed > 0 ? clip.speed : 1;
+						return {
+							clipId: clip.id,
+							outputStartMs: Math.round(clip.startMs),
+							outputEndMs: Math.round(clip.endMs),
+							sourceStartMs: Math.round(clip.sourceStartMs ?? clip.startMs),
+							sourceEndMs: getClipSourceEndMs(clip),
+							speed,
+						};
+					})
+					.filter(
+						(segment) =>
+							segment.outputEndMs > segment.outputStartMs &&
+							segment.sourceEndMs > segment.sourceStartMs,
+					)
+					.sort((left, right) => left.outputStartMs - right.outputStartMs),
+			[clipRegions],
+		);
+
+		useEffect(() => {
+			timelineSegmentsRef.current = playbackTimelineSegments;
+		}, [playbackTimelineSegments]);
+
+		useEffect(() => {
+			timelineTimeRef.current = timelineTime * 1000;
+		}, [timelineTime]);
+
 		useEffect(() => {
 			const videoEffectsContainer = videoEffectsContainerRef.current;
 			const zoomBlurFilter = zoomBlurFilterRef.current;
@@ -2314,6 +2356,8 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 					onTimeUpdate,
 					trimRegionsRef,
 					speedRegionsRef,
+					timelineSegmentsRef,
+					timelineTimeRef,
 				});
 
 			video.addEventListener("play", handlePlay);

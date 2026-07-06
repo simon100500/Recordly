@@ -263,9 +263,7 @@ function clampToNearestClipBoundary(
 	for (const clip of clips) {
 		const srcStart = clip.sourceStartMs ?? clip.startMs;
 		const boundaries =
-			kind === "timeline"
-				? [clip.startMs, clip.endMs]
-				: [srcStart, getClipSourceEndMs(clip)];
+			kind === "timeline" ? [clip.startMs, clip.endMs] : [srcStart, getClipSourceEndMs(clip)];
 
 		for (const boundary of boundaries) {
 			const distance = Math.abs(timeMs - boundary);
@@ -299,9 +297,14 @@ export function mapTimelineTimeToSourceTime(timeMs: number, clips: ClipRegion[])
 	return clampToNearestClipBoundary(roundedTimeMs, sortedClips, "timeline");
 }
 
-export function mapSourceTimeToTimelineTime(timeMs: number, clips: ClipRegion[]): number {
+export function mapSourceTimeToTimelineTime(
+	timeMs: number,
+	clips: ClipRegion[],
+	preferredTimelineTimeMs?: number,
+): number {
 	const roundedTimeMs = Math.round(timeMs);
 	const sortedClips = sortClipRegions(clips);
+	const matches: number[] = [];
 
 	for (const clip of sortedClips) {
 		const srcStart = clip.sourceStartMs ?? clip.startMs;
@@ -310,7 +313,19 @@ export function mapSourceTimeToTimelineTime(timeMs: number, clips: ClipRegion[])
 			continue;
 		}
 
-		return Math.round(clip.startMs + (roundedTimeMs - srcStart) / getSafeClipSpeed(clip));
+		matches.push(
+			Math.round(clip.startMs + (roundedTimeMs - srcStart) / getSafeClipSpeed(clip)),
+		);
+	}
+
+	if (matches.length > 0) {
+		if (Number.isFinite(preferredTimelineTimeMs)) {
+			const preferred = Math.round(preferredTimelineTimeMs ?? matches[0]);
+			return matches.reduce((best, candidate) =>
+				Math.abs(candidate - preferred) < Math.abs(best - preferred) ? candidate : best,
+			);
+		}
+		return matches[0];
 	}
 
 	if (sortedClips.length === 0) {
@@ -361,7 +376,9 @@ export function extendAutoFullTrackClip(
 /** Convert clip regions (kept segments) to trim regions (gaps to remove). */
 export function clipsToTrims(clips: ClipRegion[], totalDurationMs: number): TrimRegion[] {
 	if (clips.length === 0) return [];
-	const sorted = [...clips].sort((a, b) => (a.sourceStartMs ?? a.startMs) - (b.sourceStartMs ?? b.startMs));
+	const sorted = [...clips].sort(
+		(a, b) => (a.sourceStartMs ?? a.startMs) - (b.sourceStartMs ?? b.startMs),
+	);
 	const trims: TrimRegion[] = [];
 	let cursor = 0;
 	let trimId = 1;
@@ -370,7 +387,7 @@ export function clipsToTrims(clips: ClipRegion[], totalDurationMs: number): Trim
 		if (srcStart > cursor) {
 			trims.push({ id: `trim-gap-${trimId++}`, startMs: cursor, endMs: srcStart });
 		}
-		cursor = getClipSourceEndMs(clip);
+		cursor = Math.max(cursor, getClipSourceEndMs(clip));
 	}
 	if (cursor < totalDurationMs) {
 		trims.push({ id: `trim-gap-${trimId++}`, startMs: cursor, endMs: totalDurationMs });
@@ -380,19 +397,32 @@ export function clipsToTrims(clips: ClipRegion[], totalDurationMs: number): Trim
 
 /** Convert legacy trim regions to clip regions (complement). */
 export function trimsToClips(trims: TrimRegion[], totalDurationMs: number): ClipRegion[] {
-	if (trims.length === 0) return [{ id: "clip-1", startMs: 0, endMs: totalDurationMs, speed: 1, sourceStartMs: 0 }];
+	if (trims.length === 0)
+		return [{ id: "clip-1", startMs: 0, endMs: totalDurationMs, speed: 1, sourceStartMs: 0 }];
 	const sorted = [...trims].sort((a, b) => a.startMs - b.startMs);
 	const clips: ClipRegion[] = [];
 	let cursor = 0;
 	let clipId = 1;
 	for (const trim of sorted) {
 		if (trim.startMs > cursor) {
-			clips.push({ id: `clip-${clipId++}`, startMs: cursor, endMs: trim.startMs, speed: 1, sourceStartMs: cursor });
+			clips.push({
+				id: `clip-${clipId++}`,
+				startMs: cursor,
+				endMs: trim.startMs,
+				speed: 1,
+				sourceStartMs: cursor,
+			});
 		}
 		cursor = trim.endMs;
 	}
 	if (cursor < totalDurationMs) {
-		clips.push({ id: `clip-${clipId++}`, startMs: cursor, endMs: totalDurationMs, speed: 1, sourceStartMs: cursor });
+		clips.push({
+			id: `clip-${clipId++}`,
+			startMs: cursor,
+			endMs: totalDurationMs,
+			speed: 1,
+			sourceStartMs: cursor,
+		});
 	}
 	return clips;
 }

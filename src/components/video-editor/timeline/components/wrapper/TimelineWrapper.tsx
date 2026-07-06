@@ -10,6 +10,7 @@ import type {
 import { TimelineContext } from "dnd-timeline";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { useCallback, useRef } from "react";
+import { CLIP_ROW_ID } from "../../core/constants";
 import type { TimelineRegionSpan } from "../../core/timelineTypes";
 import { clampRange, resolveDragEnd, resolveResizeEnd } from "../../dnd/engine";
 
@@ -26,6 +27,13 @@ interface TimelineWrapperProps {
 	resolveTargetRowId?: (id: string, proposedRowId: string) => string;
 	allRegionSpans?: TimelineRegionSpan[];
 	onLiveSpanPreviewChange?: (id: string, span: Span | null) => void;
+}
+
+export function shouldPublishLiveResizePreview(
+	activeItemId: string,
+	allRegionSpans: TimelineRegionSpan[],
+) {
+	return allRegionSpans.find((region) => region.id === activeItemId)?.rowId === CLIP_ROW_ID;
 }
 
 export default function TimelineWrapper({
@@ -187,10 +195,12 @@ export default function TimelineWrapper({
 					? (event.activatorEvent as PointerEvent).clientX + (event.delta?.x ?? 0)
 					: undefined;
 			if (span) showTooltip(span, screenX);
-			// dnd-timeline mutates the active item's DOM during resize; React preview
-			// renders here can reset that inline width/edge position and make trims stutter.
+			const activeItemId = event.active.id as string;
+			if (shouldPublishLiveResizePreview(activeItemId, allRegionSpans)) {
+				onLiveSpanPreviewChange?.(activeItemId, span ?? null);
+			}
 		},
-		[showTooltip],
+		[allRegionSpans, onLiveSpanPreviewChange, showTooltip],
 	);
 
 	const hideTooltip = useCallback(() => showTooltip(null), [showTooltip]);

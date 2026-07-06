@@ -139,6 +139,55 @@ describe("resolveClipSpanChange", () => {
 		expect(getClipSourceEndMs(result?.clip as ClipRegion)).toBe(6_000);
 	});
 
+	it("pushes following clips right when stretching a clip's right edge", () => {
+		const result = resolve(
+			[
+				{ id: "clip", startMs: 0, endMs: 4_000, speed: 1, sourceStartMs: 0 },
+				{ id: "right", startMs: 4_000, endMs: 7_000, speed: 1, sourceStartMs: 4_000 },
+			],
+			"clip",
+			{ start: 0, end: 5_500 },
+		);
+
+		expect(result?.clip).toMatchObject({
+			startMs: 0,
+			endMs: 5_500,
+			sourceStartMs: 0,
+		});
+		expect(result?.clipRegions.find((clip) => clip.id === "right")).toMatchObject({
+			startMs: 5_500,
+			endMs: 8_500,
+			sourceStartMs: 4_000,
+		});
+		expect(result?.rippleDeltaMs).toBe(1_500);
+		expect(result?.rippleStartMs).toBe(4_000);
+	});
+
+	it("pushes following clips right when stretching a clip's left edge left", () => {
+		const result = resolve(
+			[
+				{ id: "left", startMs: 0, endMs: 4_000, speed: 1, sourceStartMs: 0 },
+				{ id: "clip", startMs: 4_000, endMs: 7_000, speed: 1, sourceStartMs: 4_000 },
+				{ id: "right", startMs: 7_000, endMs: 9_000, speed: 1, sourceStartMs: 7_000 },
+			],
+			"clip",
+			{ start: 3_000, end: 7_000 },
+		);
+
+		expect(result?.clip).toMatchObject({
+			startMs: 4_000,
+			endMs: 8_000,
+			sourceStartMs: 3_000,
+		});
+		expect(result?.clipRegions.find((clip) => clip.id === "right")).toMatchObject({
+			startMs: 8_000,
+			endMs: 10_000,
+			sourceStartMs: 7_000,
+		});
+		expect(result?.rippleDeltaMs).toBe(1_000);
+		expect(result?.rippleStartMs).toBe(7_000);
+	});
+
 	it("snaps moved clips to the left neighbour without changing their source segment", () => {
 		const result = resolve(
 			[

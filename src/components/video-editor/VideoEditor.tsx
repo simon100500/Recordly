@@ -121,10 +121,9 @@ const PhSettings = (props: { className?: string; weight?: "fill" | "regular" }) 
 );
 
 import type { SourceAudioTrackSettings } from "@/components/video-editor/audio/audioTypes";
-import { extensionHost } from "@/lib/extensions";
 import { useMicrophoneDevices } from "@/hooks/useMicrophoneDevices";
+import { extensionHost } from "@/lib/extensions";
 import { useVideoEditorAudio } from "./audio/useVideoEditorAudio";
-import { useVoiceoverRecorder } from "./timeline/hooks/useVoiceoverRecorder";
 import { resolveAutoCaptionSourcePath } from "./autoCaptionSource";
 import { CropControl } from "./CropControl";
 import { type CaptionEditTarget, updateCaptionCuesForEditedTarget } from "./captionEditing";
@@ -171,6 +170,7 @@ import {
 	openExternalLink,
 	RECORDLY_ISSUES_URL,
 } from "./TutorialHelp";
+import { useVoiceoverRecorder } from "./timeline/hooks/useVoiceoverRecorder";
 import TimelineEditor, { type TimelineEditorHandle } from "./timeline/TimelineEditor";
 import {
 	normalizeCursorTelemetry,
@@ -3672,9 +3672,15 @@ export default function VideoEditor() {
 		(timeMs: number) => resolveTimelineTimeToSourceTime(timeMs, clipRegions),
 		[clipRegions],
 	);
+	const timelinePlayheadTimeHintRef = useRef(0);
 
 	const mapSourceTimeToTimelineTime = useCallback(
-		(timeMs: number) => resolveSourceTimeToTimelineTime(timeMs, clipRegions),
+		(timeMs: number) =>
+			resolveSourceTimeToTimelineTime(
+				timeMs,
+				clipRegions,
+				timelinePlayheadTimeHintRef.current * 1000,
+			),
 		[clipRegions],
 	);
 
@@ -3688,10 +3694,11 @@ export default function VideoEditor() {
 		[zoomRegions, mapTimelineTimeToSourceTime],
 	);
 
-	const timelinePlayheadTime = useMemo(
-		() => mapSourceTimeToTimelineTime(currentTime * 1000) / 1000,
-		[currentTime, mapSourceTimeToTimelineTime],
-	);
+	const timelinePlayheadTime = useMemo(() => {
+		const nextTimelineTime = mapSourceTimeToTimelineTime(currentTime * 1000) / 1000;
+		timelinePlayheadTimeHintRef.current = nextTimelineTime;
+		return nextTimelineTime;
+	}, [currentTime, mapSourceTimeToTimelineTime]);
 	const timelineDuration = useMemo(
 		() => getTimelineDurationMs(clipRegions, duration * 1000) / 1000,
 		[clipRegions, duration],
@@ -3789,6 +3796,7 @@ export default function VideoEditor() {
 				playback?.pause();
 			}
 
+			timelinePlayheadTimeHintRef.current = time;
 			video.currentTime = mapTimelineTimeToSourceTime(time * 1000) / 1000;
 		},
 		[getActivePlayback, mapTimelineTimeToSourceTime],
@@ -4281,9 +4289,13 @@ export default function VideoEditor() {
 
 			const el = new Audio();
 			const durationMs = await new Promise<number>((resolve) => {
-				el.addEventListener("loadedmetadata", () => {
-					resolve(Math.round(el.duration * 1000));
-				}, { once: true });
+				el.addEventListener(
+					"loadedmetadata",
+					() => {
+						resolve(Math.round(el.duration * 1000));
+					},
+					{ once: true },
+				);
 				el.addEventListener("error", () => resolve(0), { once: true });
 				el.src = toFileUrl(audioPath);
 			});
@@ -5654,8 +5666,10 @@ export default function VideoEditor() {
 			cropRegion={cropRegion}
 			webcam={webcam}
 			webcamVideoPath={webcam.sourcePath ? resolvedWebcamVideoUrl : null}
+			clipRegions={clipRegions}
 			trimRegions={trimRegions}
 			speedRegions={effectiveSpeedRegions}
+			timelineTime={timelinePlayheadTime}
 			annotationRegions={annotationRegions}
 			autoCaptions={autoCaptions}
 			autoCaptionSettings={autoCaptionSettings}
@@ -6932,6 +6946,7 @@ export default function VideoEditor() {
 						onSeek={handleTimelineSeek}
 						videoPath={videoPath}
 						videoSourcePath={videoSourcePath}
+						sourceAudioRefreshKey={sourceAudioFallbackRefreshKey}
 						cursorTelemetrySourcePath={cursorTelemetrySourcePath}
 						cursorTelemetry={normalizedCursorTelemetry}
 						autoSuggestZoomsTrigger={autoSuggestZoomsTrigger}
