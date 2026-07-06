@@ -1,15 +1,29 @@
+/*
+ * Timeline clip styling.
+ *
+ * Dark mode (base classes): deep saturated fills with an inset accent ring on
+ *   selection — matches the editor chrome.
+ *
+ * Light mode (:root:not(.dark) overrides): modern, high-contrast "pastel card"
+ *   treatment inspired by docs/example.html — soft tinted background, saturated
+ *   inset border, lift-on-hover shadow, and a bright accent ring when selected.
+ *   Text/waveform color is set on the container so children (icons, labels, the
+ *   waveform canvas) inherit a dark, readable tone per variant.
+ */
+
+/* ===================== DARK MODE (base) ===================== */
+
 .glassGreen {
 	position: relative;
 	border-radius: 6px;
 	background: #183065;
+	color: rgba(255, 255, 255, 0.92);
 	border: none;
 	transition: background 0.15s ease;
 }
-
 .glassGreen:hover {
 	background: #1e3d7a;
 }
-
 .glassGreen.selected {
 	background: #23468a;
 	box-shadow: inset 0 0 0 1.5px #2563eb;
@@ -20,14 +34,13 @@
 	position: relative;
 	border-radius: 6px;
 	background: #652425;
+	color: rgba(255, 255, 255, 0.92);
 	border: none;
 	transition: background 0.15s ease;
 }
-
 .glassRed:hover {
 	background: #7b292a;
 }
-
 .glassRed.selected {
 	background: #8b2d2d;
 	box-shadow: inset 0 0 0 1.5px #ef4444;
@@ -38,14 +51,13 @@
 	position: relative;
 	border-radius: 6px;
 	background: #4e4726;
+	color: rgba(255, 255, 255, 0.92);
 	border: none;
 	transition: background 0.15s ease;
 }
-
 .glassYellow:hover {
 	background: #5f552b;
 }
-
 .glassYellow.selected {
 	background: #6a5f2f;
 	box-shadow: inset 0 0 0 1.5px #b4a046;
@@ -56,14 +68,13 @@
 	position: relative;
 	border-radius: 6px;
 	background: #67460f;
+	color: rgba(255, 255, 255, 0.92);
 	border: none;
 	transition: background 0.15s ease;
 }
-
 .glassAmber:hover {
 	background: #7e540f;
 }
-
 .glassAmber.selected {
 	background: #8e5e0e;
 	box-shadow: inset 0 0 0 1.5px #f59e0b;
@@ -74,14 +85,13 @@
 	position: relative;
 	border-radius: 6px;
 	background: #4a2a69;
+	color: rgba(255, 255, 255, 0.92);
 	border: none;
 	transition: background 0.15s ease;
 }
-
 .glassPurple:hover {
 	background: #593180;
 }
-
 .glassPurple.selected {
 	background: #643690;
 	box-shadow: inset 0 0 0 1.5px #a855f7;
@@ -92,14 +102,13 @@
 	position: relative;
 	border-radius: 6px;
 	background: #0d1f4a;
+	color: rgba(255, 255, 255, 0.92);
 	border: none;
 	transition: background 0.15s ease;
 }
-
 .glassCyan:hover {
 	background: #10285e;
 }
-
 .glassCyan.selected {
 	background: #143072;
 	box-shadow: inset 0 0 0 1.5px #2563eb;
@@ -110,106 +119,159 @@
 	position: relative;
 	border-radius: 6px;
 	background: #164f2d;
+	color: rgba(255, 255, 255, 0.92);
 	border: none;
 	transition: background 0.15s ease;
 }
-
 .glassDarkGreen:hover {
 	background: #186234;
 }
-
 .glassDarkGreen.selected {
 	background: #196e3a;
 	box-shadow: inset 0 0 0 1.5px #22c55e;
 	z-index: 10;
 }
 
-/* --- Light-mode overrides --- */
-:global(:root:not(.dark)) .glassGreen {
-	background: #93a8c5;
-	border: none;
-}
-:global(:root:not(.dark)) .glassGreen:hover {
-	background: #7e97b8;
-}
-:global(:root:not(.dark)) .glassGreen.selected {
-	background: #2563eb;
-	box-shadow: inset 0 0 0 1.5px #fff;
-}
+/* ===================== LIGHT MODE OVERRIDES ===================== */
+/* Pastel card: tinted fill + saturated inset border + lift shadow.
+   Inset border (box-shadow) is used instead of a real border so the
+   absolutely-positioned, resizable clips don't shift their box model. */
 
-:global(:root:not(.dark)) .glassRed {
-	background: #c08383;
-	border: none;
-}
-:global(:root:not(.dark)) .glassRed:hover {
-	background: #b06c6c;
-}
-:global(:root:not(.dark)) .glassRed.selected {
-	background: #ef4444;
-	box-shadow: inset 0 0 0 1.5px #fff;
-}
-
-:global(:root:not(.dark)) .glassYellow {
-	background: #bdaf7a;
-	border: none;
-}
-:global(:root:not(.dark)) .glassYellow:hover {
-	background: #ae9f65;
-}
-:global(:root:not(.dark)) .glassYellow.selected {
-	background: #b4a046;
-	box-shadow: inset 0 0 0 1.5px #fff;
-}
-
-:global(:root:not(.dark)) .glassAmber {
-	background: #c89f59;
-	border: none;
-}
-:global(:root:not(.dark)) .glassAmber:hover {
-	background: #b88e47;
-}
-:global(:root:not(.dark)) .glassAmber.selected {
-	background: #f59e0b;
-	box-shadow: inset 0 0 0 1.5px #fff;
-}
-
-:global(:root:not(.dark)) .glassPurple {
-	background: #a882c7;
-	border: none;
-}
-:global(:root:not(.dark)) .glassPurple:hover {
-	background: #966dba;
-}
-:global(:root:not(.dark)) .glassPurple.selected {
-	background: #a855f7;
-	box-shadow: inset 0 0 0 1.5px #fff;
-}
-
+/* Video / clip — sky blue */
 :global(:root:not(.dark)) .glassCyan {
-	background: #7ba3cf;
+	background: #e0f2fe;
+	color: #0c4a6e;
 	border: none;
+	border-radius: 8px;
+	box-shadow: inset 0 0 0 1.5px #38bdf8, 0 1px 2px rgba(15, 23, 42, 0.05);
 }
 :global(:root:not(.dark)) .glassCyan:hover {
-	background: #6491c4;
+	background: #bae6fd;
+	box-shadow: inset 0 0 0 1.5px #0ea5e9, 0 4px 12px rgba(15, 23, 42, 0.12);
 }
 :global(:root:not(.dark)) .glassCyan.selected {
-	background: #2563eb;
-	box-shadow: inset 0 0 0 1.5px #fff;
+	background: #e0f2fe;
+	box-shadow: inset 0 0 0 1.5px #0ea5e9, 0 0 0 2px #0ea5e9,
+		0 4px 12px rgba(15, 23, 42, 0.12);
+	z-index: 10;
 }
 
+/* Audio — green */
 :global(:root:not(.dark)) .glassDarkGreen {
-	background: #6caa81;
+	background: #dcfce7;
+	color: #14532d;
 	border: none;
+	border-radius: 8px;
+	box-shadow: inset 0 0 0 1.5px #4ade80, 0 1px 2px rgba(15, 23, 42, 0.05);
 }
 :global(:root:not(.dark)) .glassDarkGreen:hover {
-	background: #569871;
+	background: #bbf7d0;
+	box-shadow: inset 0 0 0 1.5px #22c55e, 0 4px 12px rgba(15, 23, 42, 0.12);
 }
 :global(:root:not(.dark)) .glassDarkGreen.selected {
-	background: #22c55e;
-	box-shadow: inset 0 0 0 1.5px #fff;
+	background: #dcfce7;
+	box-shadow: inset 0 0 0 1.5px #22c55e, 0 0 0 2px #22c55e,
+		0 4px 12px rgba(15, 23, 42, 0.12);
+	z-index: 10;
 }
 
-/* Resize handle */
+/* Zoom — violet */
+:global(:root:not(.dark)) .glassPurple {
+	background: #f3e8ff;
+	color: #6b21a8;
+	border: none;
+	border-radius: 8px;
+	box-shadow: inset 0 0 0 1.5px #c084fc, 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+:global(:root:not(.dark)) .glassPurple:hover {
+	background: #e9d5ff;
+	box-shadow: inset 0 0 0 1.5px #a855f7, 0 4px 12px rgba(15, 23, 42, 0.12);
+}
+:global(:root:not(.dark)) .glassPurple.selected {
+	background: #f3e8ff;
+	box-shadow: inset 0 0 0 1.5px #a855f7, 0 0 0 2px #a855f7,
+		0 4px 12px rgba(15, 23, 42, 0.12);
+	z-index: 10;
+}
+
+/* Annotation — yellow */
+:global(:root:not(.dark)) .glassYellow {
+	background: #fef9c3;
+	color: #854d0e;
+	border: none;
+	border-radius: 8px;
+	box-shadow: inset 0 0 0 1.5px #facc15, 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+:global(:root:not(.dark)) .glassYellow:hover {
+	background: #fef08a;
+	box-shadow: inset 0 0 0 1.5px #eab308, 0 4px 12px rgba(15, 23, 42, 0.12);
+}
+:global(:root:not(.dark)) .glassYellow.selected {
+	background: #fef9c3;
+	box-shadow: inset 0 0 0 1.5px #eab308, 0 0 0 2px #eab308,
+		0 4px 12px rgba(15, 23, 42, 0.12);
+	z-index: 10;
+}
+
+/* Trim — red */
+:global(:root:not(.dark)) .glassRed {
+	background: #fee2e2;
+	color: #991b1b;
+	border: none;
+	border-radius: 8px;
+	box-shadow: inset 0 0 0 1.5px #f87171, 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+:global(:root:not(.dark)) .glassRed:hover {
+	background: #fecaca;
+	box-shadow: inset 0 0 0 1.5px #ef4444, 0 4px 12px rgba(15, 23, 42, 0.12);
+}
+:global(:root:not(.dark)) .glassRed.selected {
+	background: #fee2e2;
+	box-shadow: inset 0 0 0 1.5px #ef4444, 0 0 0 2px #ef4444,
+		0 4px 12px rgba(15, 23, 42, 0.12);
+	z-index: 10;
+}
+
+/* Speed — amber */
+:global(:root:not(.dark)) .glassAmber {
+	background: #fef3c7;
+	color: #92400e;
+	border: none;
+	border-radius: 8px;
+	box-shadow: inset 0 0 0 1.5px #fbbf24, 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+:global(:root:not(.dark)) .glassAmber:hover {
+	background: #fde68a;
+	box-shadow: inset 0 0 0 1.5px #f59e0b, 0 4px 12px rgba(15, 23, 42, 0.12);
+}
+:global(:root:not(.dark)) .glassAmber.selected {
+	background: #fef3c7;
+	box-shadow: inset 0 0 0 1.5px #f59e0b, 0 0 0 2px #f59e0b,
+		0 4px 12px rgba(15, 23, 42, 0.12);
+	z-index: 10;
+}
+
+/* Fallback — sky blue (mirrors clip) */
+:global(:root:not(.dark)) .glassGreen {
+	background: #e0f2fe;
+	color: #0c4a6e;
+	border: none;
+	border-radius: 8px;
+	box-shadow: inset 0 0 0 1.5px #38bdf8, 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+:global(:root:not(.dark)) .glassGreen:hover {
+	background: #bae6fd;
+	box-shadow: inset 0 0 0 1.5px #0ea5e9, 0 4px 12px rgba(15, 23, 42, 0.12);
+}
+:global(:root:not(.dark)) .glassGreen.selected {
+	background: #e0f2fe;
+	box-shadow: inset 0 0 0 1.5px #0ea5e9, 0 0 0 2px #0ea5e9,
+		0 4px 12px rgba(15, 23, 42, 0.12);
+	z-index: 10;
+}
+
+/* ===================== RESIZE HANDLES ===================== */
+
 .zoomEndCap {
 	position: absolute;
 	top: 50%;
@@ -231,10 +293,10 @@
 }
 
 :global(:root:not(.dark)) .zoomEndCap {
-	background: rgba(0, 0, 0, 0.4);
+	background: rgba(15, 23, 42, 0.45);
 }
 :global(:root:not(.dark)) .zoomEndCap:hover {
-	background: rgba(0, 0, 0, 0.65);
+	background: rgba(15, 23, 42, 0.7);
 }
 
 .zoomEndCap:hover {
