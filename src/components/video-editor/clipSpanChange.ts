@@ -21,7 +21,7 @@ export function resolveClipSpanChange(params: {
 	span: Span;
 	snapThresholdMs?: number;
 }): ResolvedClipSpanChange | null {
-	const { clipRegions, id, span, snapThresholdMs = 120 } = params;
+	const { clipRegions, id, span, snapThresholdMs = 10 } = params;
 	const oldClip = clipRegions.find((clip) => clip.id === id);
 	if (!oldClip) return null;
 
