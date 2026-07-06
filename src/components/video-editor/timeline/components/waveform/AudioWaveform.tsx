@@ -1,7 +1,6 @@
 import { useTimelineContext } from "dnd-timeline";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import type { AudioPeaksData } from "../../core/timelineTypes";
-import { resolveWaveformSourceTimeMs } from "./audioWaveformMapping";
 
 interface AudioWaveformProps {
 	peaks: AudioPeaksData;
@@ -14,10 +13,26 @@ interface AudioWaveformProps {
 	className?: string;
 }
 
+// Bar geometry in CSS pixels. Each peak is scattered into the bar covering its
+// source time; a bar keeps the max level -> an honest level histogram.
+const BAR_WIDTH_CSS = 2;
+const BAR_GAP_CSS = 1;
+const BAR_PITCH_CSS = BAR_WIDTH_CSS + BAR_GAP_CSS;
+// One-sided, anchored to the bottom edge. Tallest bar reaches this fraction of
+// the clip height.
+const MAX_BAR_HEIGHT_FACTOR = 0.82;
+
 /**
- * Renders an audio waveform as a canvas that fills its parent container.
- * Automatically syncs with the timeline's visible range so the waveform
- * scrolls and zooms together with the clip items above it.
+ * Renders the clip's audio as a level-bar histogram (like a bar EQ) drawn on a
+ * canvas that fills its parent container.
+ *
+ * Correctness at every zoom level: instead of drawing one interpolated line for
+ * the whole clip (which just stretches like a static backdrop when zoomed), we
+ * scatter every decoded peak into the bar whose time-window it falls in. The
+ * bar grid is derived from the clip's *measured* pixel width, so when the user
+ * zooms in the clip gets wider, more bars fit, and the peaks spread across them
+ * — revealing finer real-audio detail. Zooming out aggregates peaks per bar
+ * (max-hold), preserving the true loudness envelope.
  */
 function AudioWaveformComponent({
 	peaks,
@@ -30,7 +45,7 @@ function AudioWaveformComponent({
 	className,
 }: AudioWaveformProps) {
 	const canvasRef = useRef<HTMLCanvasElement>(null);
-	const { range, valueToPixels } = useTimelineContext();
+	const { range } = useTimelineContext();
 	const [resizeKey, setResizeKey] = useState(0);
 	const lastDrawAtRef = useRef(0);
 
@@ -69,72 +84,72 @@ function AudioWaveformComponent({
 			const rect = canvas.getBoundingClientRect();
 			const dpr = window.devicePixelRatio || 1;
 			const cssWidth = rect.width;
+			const cssHeight = rect.height;
 			const width = Math.round(cssWidth * dpr);
-			const height = Math.round(rect.height * dpr);
+			const height = Math.round(cssHeight * dpr);
 
 			if (width === 0 || height === 0) return;
 
 			canvas.width = width;
 			canvas.height = height;
-
 			ctx.clearRect(0, 0, width, height);
 
 			const { peaks: peakData, durationMs } = peaks;
 			if (durationMs <= 0 || peakData.length === 0) return;
 
-			// Use raw values for smooth zooming/panning (no snapping)
-			const visibleStartMs = segmentStartMs ?? range.start;
-			const visibleEndMs = segmentEndMs ?? range.end;
-			const visibleDurationMs = visibleEndMs - visibleStartMs;
-			const displayStart = displayStartMs ?? visibleStartMs;
-			const displayEnd = displayEndMs ?? visibleEndMs;
-			const pixelsPerDisplayMs = valueToPixels(1000) / 1000;
+			// Source-audio span this clip actually plays back.
+			const segStart = segmentStartMs ?? range.start;
+			const segEnd = segmentEndMs ?? range.end;
+			const segDurationMs = Math.max(0, segEnd - segStart);
+			if (segDurationMs <= 0) return;
 
-			if (visibleDurationMs <= 0) return;
+			// Guard against speed/trim skew: only the source span matters for
+			// which peaks belong to this clip. displayStartMs/displayEndMs are
+			// accepted for API compatibility but the bar layout follows the
+			// measured canvas width (which already encodes the timeline zoom).
+			void displayStartMs;
+			void displayEndMs;
 
-			// Bottom-anchored one-sided wave: the waveform is symmetric, so we
-			// render only the lower half growing up from the bottom edge.
-			const baseY = height;
-			const maxBarPx = height * 0.6;
-			ctx.beginPath();
+			const peakCount = peakData.length;
+			const denom = Math.max(1, peakCount - 1);
 
-			for (let px = 0; px < width; px++) {
-				const cssX = px / dpr;
-				const t = resolveWaveformSourceTimeMs({
-					cssX,
-					segmentStartMs: visibleStartMs,
-					segmentEndMs: visibleEndMs,
-					displayStartMs: displayStart,
-					displayEndMs: displayEnd,
-					pixelsPerDisplayMs,
-				});
+			// Bar grid (CSS px), capped to the measured canvas width.
+			const numBars = Math.max(0, Math.min(Math.floor(cssWidth / BAR_PITCH_CSS), peakCount));
+			if (numBars === 0) return;
+			const levels = new Float32Array(numBars);
 
-				// If the timeline time is beyond the actual audio duration, we draw nothing (flat line)
-				if (t < 0 || t > durationMs) continue;
+			// Scatter each peak into the bar covering its source time.
+			for (let i = 0; i < peakCount; i++) {
+				const peakSourceMs = (i / denom) * durationMs;
+				if (peakSourceMs < segStart || peakSourceMs > segEnd) continue;
 
-				const exactIndex = (t / durationMs) * (peakData.length - 1);
-				const leftIndex = Math.floor(exactIndex);
-				const rightIndex = Math.min(peakData.length - 1, leftIndex + 1);
-				const mix = exactIndex - leftIndex;
+				const frac = (peakSourceMs - segStart) / segDurationMs; // 0..1 across the clip
+				const cssX = frac * cssWidth;
+				const barIndex = Math.floor(cssX / BAR_PITCH_CSS);
+				if (barIndex < 0 || barIndex >= numBars) continue;
 
-				let amplitude = peakData[leftIndex] * (1 - mix) + peakData[rightIndex] * mix;
-
-				if (normalize) amplitude = Math.sqrt(Math.max(0, amplitude));
-				amplitude = Math.max(0, Math.min(1, amplitude * gain));
-
-				const barHeight = amplitude * maxBarPx * 0.9;
-
-				ctx.moveTo(px, baseY);
-				ctx.lineTo(px, baseY - barHeight);
+				let amp = peakData[i];
+				if (normalize) amp = Math.sqrt(Math.max(0, amp));
+				amp = Math.max(0, Math.min(1, amp * gain));
+				if (amp > levels[barIndex]) levels[barIndex] = amp;
 			}
 
-			// Inherit the clip container's text color so the waveform adapts to
-			// the theme/variant (white on saturated fills in light mode, white on
-			// deep fills in dark mode).
-			const strokeColor = getComputedStyle(canvas).color || "rgba(255, 255, 255, 0.8)";
-			ctx.strokeStyle = strokeColor;
-			ctx.lineWidth = dpr;
-			ctx.stroke();
+			// Inherit the clip container's text color (white on the saturated
+			// fills) and draw bottom-anchored bars.
+			const fill = getComputedStyle(canvas).color || "rgba(255, 255, 255, 0.8)";
+			ctx.fillStyle = fill;
+
+			const baseY = height;
+			const maxBarPx = height * MAX_BAR_HEIGHT_FACTOR;
+			const barWidthDevice = Math.max(1, Math.round(BAR_WIDTH_CSS * dpr));
+
+			for (let b = 0; b < numBars; b++) {
+				const level = levels[b];
+				if (level <= 0) continue;
+				const xDevice = Math.round(b * BAR_PITCH_CSS * dpr);
+				const barHeight = Math.max(1, level * maxBarPx);
+				ctx.fillRect(xDevice, baseY - barHeight, barWidthDevice, barHeight);
+			}
 		};
 		rafId = requestAnimationFrame(draw);
 		return () => cancelAnimationFrame(rafId);
@@ -149,7 +164,6 @@ function AudioWaveformComponent({
 		resizeKey,
 		segmentStartMs,
 		segmentEndMs,
-		valueToPixels,
 	]);
 
 	return (

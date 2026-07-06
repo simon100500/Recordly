@@ -8,4 +8,4 @@ export const AUDIO_ROW_PREFIX = `${AUDIO_ROW_ID}-`;
 
 export const FALLBACK_RANGE_MS = 1000;
 export const TARGET_MARKER_COUNT = 12;
-export const WAVEFORM_DEFAULT_PEAK_COUNT = 2048;
+export const WAVEFORM_DEFAULT_PEAK_COUNT = 8000;
