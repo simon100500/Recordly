@@ -1,4 +1,10 @@
-import { clampFocusToDepth, ZOOM_DEPTH_SCALES, type ZoomDepth, type ZoomFocus } from "../types";
+import {
+	type CropRegion,
+	clampFocusToDepth,
+	ZOOM_DEPTH_SCALES,
+	type ZoomDepth,
+	type ZoomFocus,
+} from "../types";
 
 interface StageSize {
 	width: number;
@@ -34,24 +40,34 @@ function softClampToRange(value: number, min: number, max: number, softness: num
 	return clamped;
 }
 
-function getFocusBounds(depth: ZoomDepth) {
+function getFocusBounds(depth: ZoomDepth, cropRegion?: CropRegion) {
 	const zoomScale = ZOOM_DEPTH_SCALES[depth];
-	return getFocusBoundsForScale(zoomScale);
+	return getFocusBoundsForScale(zoomScale, cropRegion);
 }
 
-function getFocusBoundsForScale(zoomScale: number) {
+function getFocusBoundsForScale(zoomScale: number, cropRegion?: CropRegion) {
+	const baseMinX = cropRegion ? cropRegion.x : 0;
+	const baseMaxX = cropRegion ? cropRegion.x + cropRegion.width : 1;
+	const baseMinY = cropRegion ? cropRegion.y : 0;
+	const baseMaxY = cropRegion ? cropRegion.y + cropRegion.height : 1;
+
 	if (zoomScale <= 1) {
-		return { minX: 0, maxX: 1, minY: 0, maxY: 1 };
+		return {
+			minX: baseMinX,
+			maxX: baseMaxX,
+			minY: baseMinY,
+			maxY: baseMaxY,
+		};
 	}
 
-	const marginX = 1 / (2 * zoomScale);
-	const marginY = 1 / (2 * zoomScale);
+	const marginX = (baseMaxX - baseMinX) / (2 * zoomScale);
+	const marginY = (baseMaxY - baseMinY) / (2 * zoomScale);
 
 	return {
-		minX: marginX,
-		maxX: 1 - marginX,
-		minY: marginY,
-		maxY: 1 - marginY,
+		minX: baseMinX + marginX,
+		maxX: baseMaxX - marginX,
+		minY: baseMinY + marginY,
+		maxY: baseMaxY - marginY,
 	};
 }
 
@@ -59,9 +75,10 @@ export function clampFocusToStage(
 	focus: ZoomFocus,
 	depth: ZoomDepth,
 	_stageSize: StageSize,
+	cropRegion?: CropRegion,
 ): ZoomFocus {
 	const baseFocus = clampFocusToDepth(focus, depth);
-	const bounds = getFocusBounds(depth);
+	const bounds = getFocusBounds(depth, cropRegion);
 
 	return {
 		cx: clamp(baseFocus.cx, bounds.minX, bounds.maxX),
@@ -69,12 +86,21 @@ export function clampFocusToStage(
 	};
 }
 
-export function clampFocusToScale(focus: ZoomFocus, zoomScale: number): ZoomFocus {
+export function clampFocusToScale(
+	focus: ZoomFocus,
+	zoomScale: number,
+	cropRegion?: CropRegion,
+): ZoomFocus {
+	const baseMinX = cropRegion ? cropRegion.x : 0;
+	const baseMaxX = cropRegion ? cropRegion.x + cropRegion.width : 1;
+	const baseMinY = cropRegion ? cropRegion.y : 0;
+	const baseMaxY = cropRegion ? cropRegion.y + cropRegion.height : 1;
+
 	const baseFocus = {
-		cx: clamp(focus.cx, 0, 1),
-		cy: clamp(focus.cy, 0, 1),
+		cx: clamp(focus.cx, baseMinX, baseMaxX),
+		cy: clamp(focus.cy, baseMinY, baseMaxY),
 	};
-	const bounds = getFocusBoundsForScale(zoomScale);
+	const bounds = getFocusBoundsForScale(zoomScale, cropRegion);
 
 	return {
 		cx: clamp(baseFocus.cx, bounds.minX, bounds.maxX),
@@ -82,12 +108,21 @@ export function clampFocusToScale(focus: ZoomFocus, zoomScale: number): ZoomFocu
 	};
 }
 
-export function softenFocusToScale(focus: ZoomFocus, zoomScale: number): ZoomFocus {
+export function softenFocusToScale(
+	focus: ZoomFocus,
+	zoomScale: number,
+	cropRegion?: CropRegion,
+): ZoomFocus {
+	const baseMinX = cropRegion ? cropRegion.x : 0;
+	const baseMaxX = cropRegion ? cropRegion.x + cropRegion.width : 1;
+	const baseMinY = cropRegion ? cropRegion.y : 0;
+	const baseMaxY = cropRegion ? cropRegion.y + cropRegion.height : 1;
+
 	const baseFocus = {
-		cx: clamp(focus.cx, 0, 1),
-		cy: clamp(focus.cy, 0, 1),
+		cx: clamp(focus.cx, baseMinX, baseMaxX),
+		cy: clamp(focus.cy, baseMinY, baseMaxY),
 	};
-	const bounds = getFocusBoundsForScale(zoomScale);
+	const bounds = getFocusBoundsForScale(zoomScale, cropRegion);
 	const horizontalRange = bounds.maxX - bounds.minX;
 	const verticalRange = bounds.maxY - bounds.minY;
 	const horizontalSoftness = Math.min(0.12, horizontalRange * 0.35);
@@ -120,8 +155,9 @@ export function edgeSnapFocus(
 	cursorFocus: ZoomFocus,
 	zoomScale: number,
 	snapToEdgesRatio: number,
+	cropRegion?: CropRegion,
 ): ZoomFocus {
-	const bounds = getFocusBoundsForScale(zoomScale);
+	const bounds = getFocusBoundsForScale(zoomScale, cropRegion);
 
 	const snappedX = clampedInterpolate(
 		cursorFocus.cx,

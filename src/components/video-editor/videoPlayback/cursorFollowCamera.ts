@@ -1,4 +1,4 @@
-import type { CursorTelemetryPoint, ZoomFocus } from "../types";
+import type { CropRegion, CursorTelemetryPoint, ZoomFocus } from "../types";
 import { interpolateCursorPosition } from "./cursorRenderer";
 import { clampFocusToScale } from "./focusUtils";
 
@@ -86,6 +86,7 @@ function recenterFocusWhenCursorLeavesSafeZone(
 	cursorFocus: ZoomFocus,
 	zoomScale: number,
 	safeZoneRatio: number,
+	cropRegion?: CropRegion,
 ): ZoomFocus {
 	const halfSpan = getVisibleHalfSpan(zoomScale);
 	const visibleSpan = halfSpan * 2;
@@ -117,6 +118,7 @@ function recenterFocusWhenCursorLeavesSafeZone(
 			cy: nextFocusY,
 		},
 		zoomScale,
+		cropRegion,
 	);
 }
 
@@ -137,8 +139,9 @@ export function computeCursorFollowFocus(
 	zoomStrength: number,
 	regionFocus: ZoomFocus,
 	config: CursorFollowConfig = DEFAULT_CURSOR_FOLLOW_CONFIG,
+	cropRegion?: CropRegion,
 ): ZoomFocus {
-	const clampedRegionFocus = clampFocusToScale(regionFocus, zoomScale);
+	const clampedRegionFocus = clampFocusToScale(regionFocus, zoomScale, cropRegion);
 
 	// If not zoomed (strength ≈ 0), reset state and return region focus
 	if (zoomStrength < 0.01) {
@@ -190,6 +193,7 @@ export function computeCursorFollowFocus(
 		{ cx: cursorPos.cx, cy: cursorPos.cy },
 		zoomScale,
 		config.snapToEdgesRatio,
+		cropRegion,
 	);
 
 	state.focusX = targetFocus.cx;

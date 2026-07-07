@@ -3,6 +3,7 @@ import type { Span } from "dnd-timeline";
 import { useItem } from "dnd-timeline";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import type { ZoomMode } from "../types";
 import AudioWaveform from "./components/waveform/AudioWaveform";
 import type { AudioPeaksData } from "./core/timelineTypes";
 import glassStyles from "./ItemGlass.module.css";
@@ -17,7 +18,7 @@ interface ItemProps {
 	onSelect?: () => void;
 	onSelectId?: (id: string) => void;
 	zoomDepth?: number;
-	zoomMode?: "auto" | "manual";
+	zoomMode?: ZoomMode;
 	speedValue?: number;
 	waveformPeaks?: AudioPeaksData | null;
 	waveformSegmentSpan?: Span;

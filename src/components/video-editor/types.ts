@@ -5,7 +5,7 @@ export interface ZoomFocus {
 	cy: number; // normalized vertical center (0-1)
 }
 
-export type ZoomMode = "auto" | "manual";
+export type ZoomMode = "auto" | "manual" | "follow";
 
 export interface ZoomRegion {
 	id: string;

@@ -74,7 +74,6 @@ import type {
 	ZoomMotionBlurTuning,
 	ZoomTransitionEasing,
 } from "./types";
-import { DEFAULT_SILENCE_DETECTION_SETTINGS } from "./types";
 import {
 	ADVANCED_VERTICAL_PADDING_MAX,
 	DEFAULT_AUTO_CAPTION_SETTINGS,
@@ -91,6 +90,7 @@ import {
 	DEFAULT_CURSOR_STYLE,
 	DEFAULT_CURSOR_SWAY,
 	DEFAULT_PADDING,
+	DEFAULT_SILENCE_DETECTION_SETTINGS,
 	DEFAULT_WEBCAM_CORNER_RADIUS,
 	DEFAULT_WEBCAM_MARGIN,
 	DEFAULT_WEBCAM_POSITION_PRESET,
@@ -182,9 +182,10 @@ function isHexWallpaper(value: string): boolean {
 
 function hexToRgba(hex: string, alpha: number) {
 	const normalized = isHexWallpaper(hex) ? hex : DEFAULT_CURSOR_CLICK_EFFECT_COLOR;
-	const value = normalized.length === 4
-		? `#${normalized[1]}${normalized[1]}${normalized[2]}${normalized[2]}${normalized[3]}${normalized[3]}`
-		: normalized;
+	const value =
+		normalized.length === 4
+			? `#${normalized[1]}${normalized[1]}${normalized[2]}${normalized[2]}${normalized[3]}${normalized[3]}`
+			: normalized;
 	const color = Number.parseInt(value.slice(1), 16);
 	const red = (color >> 16) & 255;
 	const green = (color >> 8) & 255;
@@ -532,8 +533,23 @@ function CursorClickEffectPreview({
 					viewBox="0 0 40 40"
 					aria-hidden="true"
 				>
-					<circle cx="20" cy="20" r="11.5" fill="none" stroke="currentColor" strokeWidth="1.8" opacity="0.75" />
-					<path d="M12.5 27.5 27.5 12.5" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="2.2" opacity="0.92" />
+					<circle
+						cx="20"
+						cy="20"
+						r="11.5"
+						fill="none"
+						stroke="currentColor"
+						strokeWidth="1.8"
+						opacity="0.75"
+					/>
+					<path
+						d="M12.5 27.5 27.5 12.5"
+						fill="none"
+						stroke="currentColor"
+						strokeLinecap="round"
+						strokeWidth="2.2"
+						opacity="0.92"
+					/>
 				</svg>
 			) : null}
 			{effect === "ripple" ? (
@@ -574,13 +590,17 @@ function CursorClickEffectPreview({
 					viewBox="0 0 48 48"
 					aria-hidden="true"
 				>
-					<g
-						fill="none"
-						stroke="currentColor"
-					>
+					<g fill="none" stroke="currentColor">
 						<circle cx="24" cy="24" r="9" strokeWidth="1.8" opacity="0.72" />
 						<circle cx="24" cy="24" r="14.5" strokeWidth="1.5" opacity="0.4" />
-						<circle cx="24" cy="24" r="4.25" fill="currentColor" opacity="0.22" stroke="none" />
+						<circle
+							cx="24"
+							cy="24"
+							r="4.25"
+							fill="currentColor"
+							opacity="0.22"
+							stroke="none"
+						/>
 					</g>
 				</svg>
 			) : null}
@@ -663,7 +683,10 @@ function CursorClickEffectCards({
 						>
 							<div className="flex h-full flex-col items-center justify-between gap-3">
 								<div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-[8px] px-2 py-1.5">
-									<CursorClickEffectPreview effect={effect.id} color={effectColor} />
+									<CursorClickEffectPreview
+										effect={effect.id}
+										color={effectColor}
+									/>
 								</div>
 							</div>
 						</ToggleGroupItem>
@@ -2862,7 +2885,9 @@ export function SettingsPanel({
 					<SectionLabel>Silence Removal</SectionLabel>
 					<button
 						type="button"
-						onClick={() => onSilenceDetectionSettingsChange?.(DEFAULT_SILENCE_DETECTION_SETTINGS)}
+						onClick={() =>
+							onSilenceDetectionSettingsChange?.(DEFAULT_SILENCE_DETECTION_SETTINGS)
+						}
 						className="text-[10px] text-[#2563EB] transition-opacity hover:opacity-80"
 					>
 						{t("common.actions.reset", "Reset")}
@@ -3360,6 +3385,18 @@ export function SettingsPanel({
 								</button>
 								<button
 									type="button"
+									onClick={() => onZoomModeChange?.("follow")}
+									className={cn(
+										"flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-all",
+										selectedZoomMode === "follow"
+											? "bg-[#2563EB] text-white shadow-sm"
+											: "text-muted-foreground hover:text-foreground",
+									)}
+								>
+									{tSettings("zoom.modeFollow", "Follow")}
+								</button>
+								<button
+									type="button"
 									onClick={() => onZoomModeChange?.("manual")}
 									className={cn(
 										"flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-all",
@@ -3377,10 +3414,15 @@ export function SettingsPanel({
 											"zoom.modeManualDescription",
 											"Set a fixed focus point for this zoom",
 										)
-									: tSettings(
-											"zoom.modeAutoDescription",
-											"Camera recenters when the cursor nears the edge of the zoomed view",
-										)}
+									: selectedZoomMode === "follow"
+										? tSettings(
+												"zoom.modeFollowDescription",
+												"Camera follows cursor, never exits crop boundary",
+											)
+										: tSettings(
+												"zoom.modeAutoDescription",
+												"Camera recenters when the cursor nears the edge of the zoomed view",
+											)}
 							</p>
 						</div>
 						<div className="grid grid-cols-6 gap-1.5">
@@ -3514,7 +3556,9 @@ export function SettingsPanel({
 							{tSettings("audio.microphone", "Microphone")}
 						</span>
 						<Select
-							value={voiceoverDeviceId ?? voiceoverMicDevices[0]?.deviceId ?? "default"}
+							value={
+								voiceoverDeviceId ?? voiceoverMicDevices[0]?.deviceId ?? "default"
+							}
 							onValueChange={(id) => onVoiceoverDeviceChange?.(id)}
 						>
 							<SelectTrigger className="h-7 w-[140px] text-xs [&>span]:truncate">
@@ -3522,7 +3566,11 @@ export function SettingsPanel({
 							</SelectTrigger>
 							<SelectContent className="bg-editor-surface-alt border-foreground/10 text-xs">
 								{voiceoverMicDevices.map((device) => (
-									<SelectItem key={device.deviceId} value={device.deviceId} className="text-xs">
+									<SelectItem
+										key={device.deviceId}
+										value={device.deviceId}
+										className="text-xs"
+									>
 										{device.label}
 									</SelectItem>
 								))}
@@ -3845,12 +3893,15 @@ export function SettingsPanel({
 										<div className="flex flex-wrap gap-1.5">
 											{CLICK_EFFECT_COLOR_OPTIONS.map((color) => {
 												const isSelected =
-													cursorClickEffectColor.toLowerCase() === color.toLowerCase();
+													cursorClickEffectColor.toLowerCase() ===
+													color.toLowerCase();
 												return (
 													<button
 														key={color}
 														type="button"
-														onClick={() => onCursorClickEffectColorChange?.(color)}
+														onClick={() =>
+															onCursorClickEffectColorChange?.(color)
+														}
 														className={cn(
 															"h-6 w-6 rounded-[8px] border transition-transform hover:scale-[1.04]",
 															isSelected
@@ -3864,7 +3915,9 @@ export function SettingsPanel({
 											})}
 											<button
 												type="button"
-												onClick={() => cursorClickEffectColorInputRef.current?.click()}
+												onClick={() =>
+													cursorClickEffectColorInputRef.current?.click()
+												}
 												className="relative h-6 w-10 overflow-hidden rounded-[8px] border border-foreground/10 text-[8px] font-semibold uppercase tracking-[0.18em] text-foreground"
 												style={{
 													background: `linear-gradient(135deg, ${cursorClickEffectColor} 0%, ${cursorClickEffectColor} 58%, rgba(255,255,255,0.92) 58%, rgba(255,255,255,0.92) 100%)`,
