@@ -2543,17 +2543,28 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 								const offsetY = prev.y + (targetOffsetY - prev.y) * smoothFactor;
 								cropFollowOffsetRef.current = { x: offsetX, y: offsetY };
 
-								regionFocus = {
-									cx: regionFocus.cx + offsetX,
-									cy: regionFocus.cy + offsetY,
-								};
+								// DON'T add offset to focus — focus stays on cursor.
+								// Only mask shifts, so visible area moves keeping cursor inside.
 
-								const stageSize = stageSizeRef.current;
+								// Convert offset from video normalized [0,1] to stage pixels
+								// maskStageSize = croppedDisplaySize, cropNorm = crop.width/height
+								// fullVideoDisplaySize = maskStageSize / cropNorm
+								// offset in stage = offsetNorm * fullVideoDisplaySize
+								const maskStageW = baseMaskRef.current.width;
+								const maskStageH = baseMaskRef.current.height;
+								const cropNormW = crop.width;
+								const cropNormH = crop.height;
 								const maskContainer = maskContainerRef.current;
-								if (maskContainer && stageSize.width > 0 && stageSize.height > 0) {
+								if (
+									maskContainer &&
+									maskStageW > 0 &&
+									maskStageH > 0 &&
+									cropNormW > 0 &&
+									cropNormH > 0
+								) {
 									maskContainer.position.set(
-										offsetX * stageSize.width,
-										offsetY * stageSize.height,
+										offsetX * (maskStageW / cropNormW),
+										offsetY * (maskStageH / cropNormH),
 									);
 								}
 							}
