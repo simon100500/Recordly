@@ -168,6 +168,7 @@ import {
 	resetCursorFollowCamera,
 	SNAP_TO_EDGES_RATIO_AUTO,
 } from "./videoPlayback/cursorFollowCamera";
+import { interpolateCursorPosition } from "./videoPlayback/cursorRenderer";
 import { clampFocusToStage as clampFocusToStageUtil } from "./videoPlayback/focusUtils";
 import { layoutVideoContent as layoutVideoContentUtil } from "./videoPlayback/layoutUtils";
 import { updateOverlayIndicator } from "./videoPlayback/overlayUtils";
@@ -596,6 +597,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		const cropBoundsRef = useRef({ startX: 0, endX: 0, startY: 0, endY: 0 });
 		const cropRegionRef = useRef<import("./types").CropRegion | undefined>(cropRegion);
 		const maskGraphicsRef = useRef<Graphics | null>(null);
+		const maskContainerRef = useRef<Container | null>(null);
 		const frameSpriteRef = useRef<Sprite | null>(null);
 		const frameContainerRef = useRef<Container | null>(null);
 		const frameIdRef = useRef<string | null>(frame);
@@ -2332,10 +2334,13 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			videoSpriteRef.current = videoSprite;
 
 			const maskGraphics = new Graphics();
+			const maskContainer = new Container();
+			maskContainer.addChild(maskGraphics);
 			videoContainer.addChild(videoSprite);
-			videoContainer.addChild(maskGraphics);
-			videoContainer.mask = maskGraphics;
+			videoContainer.addChild(maskContainer);
+			videoContainer.mask = maskContainer;
 			maskGraphicsRef.current = maskGraphics;
+			maskContainerRef.current = maskContainer;
 			if (cursorOverlayRef.current) {
 				cursorContainer.addChild(cursorOverlayRef.current.container);
 			}
@@ -2492,13 +2497,62 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 							strength,
 							region.focus,
 							{ snapToEdgesRatio: SNAP_TO_EDGES_RATIO_AUTO },
-							region.mode === "follow" ? cropRegionRef.current : undefined,
 						);
+
+						// Dynamic crop offset for "follow" mode — mask shifts to never let cursor exit crop
+						if (region.mode === "follow") {
+							const crop = cropRegionRef.current;
+							const cursorPos = interpolateCursorPosition(
+								cursorTelemetryRef.current,
+								currentTimeRef.current,
+							);
+							if (crop && cursorPos && crop.width > 0 && crop.height > 0) {
+								const relX = (cursorPos.cx - crop.x) / crop.width;
+								const relY = (cursorPos.cy - crop.y) / crop.height;
+								const enterMargin = 0.25;
+								let offsetX = 0;
+								let offsetY = 0;
+
+								if (relX < enterMargin) {
+									offsetX = (enterMargin - relX) * crop.width;
+								} else if (relX > 1 - enterMargin) {
+									offsetX = (1 - enterMargin - relX) * crop.width;
+								}
+
+								if (relY < enterMargin) {
+									offsetY = (enterMargin - relY) * crop.height;
+								} else if (relY > 1 - enterMargin) {
+									offsetY = (1 - enterMargin - relY) * crop.height;
+								}
+
+								regionFocus = {
+									cx: regionFocus.cx + offsetX,
+									cy: regionFocus.cy + offsetY,
+								};
+
+								const stageSize = stageSizeRef.current;
+								const maskContainer = maskContainerRef.current;
+								if (maskContainer && stageSize.width > 0 && stageSize.height > 0) {
+									maskContainer.position.set(
+										offsetX * stageSize.width,
+										offsetY * stageSize.height,
+									);
+								}
+							}
+						}
+					}
+
+					// Reset mask container when mode is not "follow"
+					if (maskContainerRef.current && region.mode !== "follow") {
+						maskContainerRef.current.position.set(0, 0);
 					}
 
 					targetScaleFactor = zoomScale;
 					targetFocus = regionFocus;
 					targetProgress = strength;
+				} else if (maskContainerRef.current) {
+					// Not zoomed in follow mode — reset mask container
+					maskContainerRef.current.position.set(0, 0);
 				}
 
 				const state = animationStateRef.current;
