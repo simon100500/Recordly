@@ -598,6 +598,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		const cropRegionRef = useRef<import("./types").CropRegion | undefined>(cropRegion);
 		const maskGraphicsRef = useRef<Graphics | null>(null);
 		const maskContainerRef = useRef<Container | null>(null);
+		const cropFollowOffsetRef = useRef({ x: 0, y: 0 });
 		const frameSpriteRef = useRef<Sprite | null>(null);
 		const frameContainerRef = useRef<Container | null>(null);
 		const frameIdRef = useRef<string | null>(frame);
@@ -2510,20 +2511,37 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 								const relX = (cursorPos.cx - crop.x) / crop.width;
 								const relY = (cursorPos.cy - crop.y) / crop.height;
 								const enterMargin = 0.25;
-								let offsetX = 0;
-								let offsetY = 0;
+								let targetOffsetX = 0;
+								let targetOffsetY = 0;
 
 								if (relX < enterMargin) {
-									offsetX = (enterMargin - relX) * crop.width;
+									targetOffsetX = (relX - enterMargin) * crop.width;
 								} else if (relX > 1 - enterMargin) {
-									offsetX = (1 - enterMargin - relX) * crop.width;
+									targetOffsetX = (relX - (1 - enterMargin)) * crop.width;
 								}
 
 								if (relY < enterMargin) {
-									offsetY = (enterMargin - relY) * crop.height;
+									targetOffsetY = (relY - enterMargin) * crop.height;
 								} else if (relY > 1 - enterMargin) {
-									offsetY = (1 - enterMargin - relY) * crop.height;
+									targetOffsetY = (relY - (1 - enterMargin)) * crop.height;
 								}
+
+								// Clamp offset so crop stays within video bounds [0, 1]
+								targetOffsetX = Math.max(
+									-crop.x,
+									Math.min(targetOffsetX, 1 - crop.x - crop.width),
+								);
+								targetOffsetY = Math.max(
+									-crop.y,
+									Math.min(targetOffsetY, 1 - crop.y - crop.height),
+								);
+
+								// Smooth offset using linear interpolation
+								const prev = cropFollowOffsetRef.current;
+								const smoothFactor = 0.15;
+								const offsetX = prev.x + (targetOffsetX - prev.x) * smoothFactor;
+								const offsetY = prev.y + (targetOffsetY - prev.y) * smoothFactor;
+								cropFollowOffsetRef.current = { x: offsetX, y: offsetY };
 
 								regionFocus = {
 									cx: regionFocus.cx + offsetX,
@@ -2543,16 +2561,22 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 					}
 
 					// Reset mask container when mode is not "follow"
-					if (maskContainerRef.current && region.mode !== "follow") {
-						maskContainerRef.current.position.set(0, 0);
+					if (region.mode !== "follow") {
+						if (maskContainerRef.current) {
+							maskContainerRef.current.position.set(0, 0);
+						}
+						cropFollowOffsetRef.current = { x: 0, y: 0 };
 					}
 
 					targetScaleFactor = zoomScale;
 					targetFocus = regionFocus;
 					targetProgress = strength;
-				} else if (maskContainerRef.current) {
-					// Not zoomed in follow mode — reset mask container
-					maskContainerRef.current.position.set(0, 0);
+				} else {
+					// Not zoomed — reset mask container and offset
+					if (maskContainerRef.current) {
+						maskContainerRef.current.position.set(0, 0);
+					}
+					cropFollowOffsetRef.current = { x: 0, y: 0 };
 				}
 
 				const state = animationStateRef.current;
