@@ -383,6 +383,28 @@ function getErrorMessage(error: unknown): string {
 	return "Something went wrong";
 }
 
+function computeCenteredCropForRatio(
+	targetRatio: number,
+	videoWidth: number,
+	videoHeight: number,
+): CropRegion {
+	const videoRatio = videoWidth / videoHeight;
+
+	if (Math.abs(targetRatio - videoRatio) < 0.001) {
+		return { x: 0, y: 0, width: 1, height: 1 };
+	}
+
+	if (targetRatio > videoRatio) {
+		const cropHeight = videoWidth / targetRatio / videoHeight;
+		const cropY = (1 - cropHeight) / 2;
+		return { x: 0, y: cropY, width: 1, height: cropHeight };
+	}
+
+	const cropWidth = (videoHeight * targetRatio) / videoWidth;
+	const cropX = (1 - cropWidth) / 2;
+	return { x: cropX, y: 0, width: cropWidth, height: 1 };
+}
+
 export default function VideoEditor() {
 	const { t } = useI18n();
 	const smokeExportConfig = useMemo(
@@ -609,6 +631,20 @@ export default function VideoEditor() {
 	const [aspectRatio, setAspectRatio] = useState<AspectRatio>(
 		initialEditorPreferences.aspectRatio,
 	);
+
+	// Auto-snap crop region to match selected aspect ratio
+	useEffect(() => {
+		if (aspectRatio === "native") return;
+
+		const video = videoPlaybackRef.current?.video;
+		if (!video || video.videoWidth === 0 || video.videoHeight === 0) return;
+
+		const targetRatio = getAspectRatioValue(aspectRatio, video.videoWidth / video.videoHeight);
+		setCropRegion(
+			computeCenteredCropForRatio(targetRatio, video.videoWidth, video.videoHeight),
+		);
+	}, [aspectRatio]);
+
 	const [activeEffectSection, setActiveEffectSection] = useState<EditorEffectSection>("scene");
 	const [exportQuality, setExportQuality] = useState<ExportQuality>(
 		initialEditorPreferences.exportQuality,
@@ -5515,8 +5551,32 @@ export default function VideoEditor() {
 
 	const handleOpenCropEditor = useCallback(() => {
 		cropSnapshotRef.current = { ...cropRegion };
+
+		// Snap to centered crop if crop is still default and aspect ratio is not native
+		const isDefaultCrop =
+			cropRegion.x === 0 &&
+			cropRegion.y === 0 &&
+			cropRegion.width === 1 &&
+			cropRegion.height === 1;
+		if (isDefaultCrop && aspectRatio !== "native") {
+			const video = videoPlaybackRef.current?.video;
+			if (video && video.videoWidth > 0 && video.videoHeight > 0) {
+				const targetRatio = getAspectRatioValue(
+					aspectRatio,
+					video.videoWidth / video.videoHeight,
+				);
+				const centered = computeCenteredCropForRatio(
+					targetRatio,
+					video.videoWidth,
+					video.videoHeight,
+				);
+				setCropRegion(centered);
+				cropSnapshotRef.current = { ...centered };
+			}
+		}
+
 		setShowCropModal(true);
-	}, [cropRegion]);
+	}, [cropRegion, aspectRatio]);
 
 	const handleCloseCropEditor = useCallback(() => {
 		setShowCropModal(false);
