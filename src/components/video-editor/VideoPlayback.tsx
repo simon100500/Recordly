@@ -2508,63 +2508,59 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 								currentTimeRef.current,
 							);
 							if (crop && cursorPos && crop.width > 0 && crop.height > 0) {
-								const relX = (cursorPos.cx - crop.x) / crop.width;
-								const relY = (cursorPos.cy - crop.y) / crop.height;
 								const enterMargin = 0.25;
-								let targetOffsetX = 0;
-								let targetOffsetY = 0;
+								const prev = cropFollowOffsetRef.current;
+
+								// Compute relX against effective crop (base + prev offset)
+								const effCropX = crop.x + prev.x;
+								const effCropY = crop.y + prev.y;
+								const relX = (cursorPos.cx - effCropX) / crop.width;
+								const relY = (cursorPos.cy - effCropY) / crop.height;
+
+								// Target: push effective crop so cursor ends up at center of safe zone (rel = 0.5)
+								let targetOffsetX = prev.x;
+								let targetOffsetY = prev.y;
 
 								if (relX < enterMargin) {
-									targetOffsetX = (relX - enterMargin) * crop.width;
+									targetOffsetX -= (enterMargin - relX) * crop.width;
 								} else if (relX > 1 - enterMargin) {
-									targetOffsetX = (relX - (1 - enterMargin)) * crop.width;
+									targetOffsetX += (relX - (1 - enterMargin)) * crop.width;
 								}
 
 								if (relY < enterMargin) {
-									targetOffsetY = (relY - enterMargin) * crop.height;
+									targetOffsetY -= (enterMargin - relY) * crop.height;
 								} else if (relY > 1 - enterMargin) {
-									targetOffsetY = (relY - (1 - enterMargin)) * crop.height;
+									targetOffsetY += (relY - (1 - enterMargin)) * crop.height;
 								}
 
-								// Clamp offset so crop stays within video bounds [0, 1]
-								targetOffsetX = Math.max(
-									-crop.x,
-									Math.min(targetOffsetX, 1 - crop.x - crop.width),
-								);
-								targetOffsetY = Math.max(
-									-crop.y,
-									Math.min(targetOffsetY, 1 - crop.y - crop.height),
-								);
+								// Clamp so effective crop stays within video [0, 1]
+								targetOffsetX = Math.max(-crop.x, Math.min(targetOffsetX, 1 - crop.x - crop.width));
+								targetOffsetY = Math.max(-crop.y, Math.min(targetOffsetY, 1 - crop.y - crop.height));
 
-								// Smooth offset using linear interpolation
-								const prev = cropFollowOffsetRef.current;
-								const smoothFactor = 0.15;
+								// Smooth offset
+								const smoothFactor = 0.12;
 								const offsetX = prev.x + (targetOffsetX - prev.x) * smoothFactor;
 								const offsetY = prev.y + (targetOffsetY - prev.y) * smoothFactor;
 								cropFollowOffsetRef.current = { x: offsetX, y: offsetY };
 
-								// DON'T add offset to focus — focus stays on cursor.
-								// Only mask shifts, so visible area moves keeping cursor inside.
+								// Clamp focus to the EFFECTIVE crop (base crop + offset)
+								const effCropMinX = crop.x + offsetX;
+								const effCropMaxX = crop.x + crop.width + offsetX;
+								const effCropMinY = crop.y + offsetY;
+								const effCropMaxY = crop.y + crop.height + offsetY;
+								regionFocus = {
+									cx: Math.max(effCropMinX, Math.min(regionFocus.cx, effCropMaxX)),
+									cy: Math.max(effCropMinY, Math.min(regionFocus.cy, effCropMaxY)),
+								};
 
-								// Convert offset from video normalized [0,1] to stage pixels
-								// maskStageSize = croppedDisplaySize, cropNorm = crop.width/height
-								// fullVideoDisplaySize = maskStageSize / cropNorm
-								// offset in stage = offsetNorm * fullVideoDisplaySize
+								// Shift mask container to match effective crop position
 								const maskStageW = baseMaskRef.current.width;
 								const maskStageH = baseMaskRef.current.height;
-								const cropNormW = crop.width;
-								const cropNormH = crop.height;
 								const maskContainer = maskContainerRef.current;
-								if (
-									maskContainer &&
-									maskStageW > 0 &&
-									maskStageH > 0 &&
-									cropNormW > 0 &&
-									cropNormH > 0
-								) {
+								if (maskContainer && maskStageW > 0 && maskStageH > 0) {
 									maskContainer.position.set(
-										offsetX * (maskStageW / cropNormW),
-										offsetY * (maskStageH / cropNormH),
+										offsetX * (maskStageW / crop.width),
+										offsetY * (maskStageH / crop.height),
 									);
 								}
 							}
