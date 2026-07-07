@@ -167,8 +167,8 @@ import {
 	createCursorFollowCameraState,
 	resetCursorFollowCamera,
 	SNAP_TO_EDGES_RATIO_AUTO,
+	SNAP_TO_EDGES_RATIO_FOLLOW,
 } from "./videoPlayback/cursorFollowCamera";
-import { interpolateCursorPosition } from "./videoPlayback/cursorRenderer";
 import { clampFocusToStage as clampFocusToStageUtil } from "./videoPlayback/focusUtils";
 import { layoutVideoContent as layoutVideoContentUtil } from "./videoPlayback/layoutUtils";
 import { updateOverlayIndicator } from "./videoPlayback/overlayUtils";
@@ -598,7 +598,6 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		const cropRegionRef = useRef<import("./types").CropRegion | undefined>(cropRegion);
 		const maskGraphicsRef = useRef<Graphics | null>(null);
 		const maskContainerRef = useRef<Container | null>(null);
-		const cropFollowOffsetRef = useRef({ x: 0, y: 0 });
 		const frameSpriteRef = useRef<Sprite | null>(null);
 		const frameContainerRef = useRef<Container | null>(null);
 		const frameIdRef = useRef<string | null>(frame);
@@ -2497,93 +2496,18 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 							zoomScale,
 							strength,
 							region.focus,
-							{ snapToEdgesRatio: SNAP_TO_EDGES_RATIO_AUTO },
+							{
+								snapToEdgesRatio:
+									region.mode === "follow"
+										? SNAP_TO_EDGES_RATIO_FOLLOW
+										: SNAP_TO_EDGES_RATIO_AUTO,
+							},
 						);
-
-						// Dynamic crop offset for "follow" mode — mask shifts to never let cursor exit crop
-						if (region.mode === "follow") {
-							const crop = cropRegionRef.current;
-							const cursorPos = interpolateCursorPosition(
-								cursorTelemetryRef.current,
-								currentTimeRef.current,
-							);
-							if (crop && cursorPos && crop.width > 0 && crop.height > 0) {
-								const enterMargin = 0.25;
-								const prev = cropFollowOffsetRef.current;
-
-								// Compute relX against effective crop (base + prev offset)
-								const effCropX = crop.x + prev.x;
-								const effCropY = crop.y + prev.y;
-								const relX = (cursorPos.cx - effCropX) / crop.width;
-								const relY = (cursorPos.cy - effCropY) / crop.height;
-
-								// Target: push effective crop so cursor ends up at center of safe zone (rel = 0.5)
-								let targetOffsetX = prev.x;
-								let targetOffsetY = prev.y;
-
-								if (relX < enterMargin) {
-									targetOffsetX -= (enterMargin - relX) * crop.width;
-								} else if (relX > 1 - enterMargin) {
-									targetOffsetX += (relX - (1 - enterMargin)) * crop.width;
-								}
-
-								if (relY < enterMargin) {
-									targetOffsetY -= (enterMargin - relY) * crop.height;
-								} else if (relY > 1 - enterMargin) {
-									targetOffsetY += (relY - (1 - enterMargin)) * crop.height;
-								}
-
-								// Clamp so effective crop stays within video [0, 1]
-								targetOffsetX = Math.max(-crop.x, Math.min(targetOffsetX, 1 - crop.x - crop.width));
-								targetOffsetY = Math.max(-crop.y, Math.min(targetOffsetY, 1 - crop.y - crop.height));
-
-								// Smooth offset
-								const smoothFactor = 0.12;
-								const offsetX = prev.x + (targetOffsetX - prev.x) * smoothFactor;
-								const offsetY = prev.y + (targetOffsetY - prev.y) * smoothFactor;
-								cropFollowOffsetRef.current = { x: offsetX, y: offsetY };
-
-								// Clamp focus to the EFFECTIVE crop (base crop + offset)
-								const effCropMinX = crop.x + offsetX;
-								const effCropMaxX = crop.x + crop.width + offsetX;
-								const effCropMinY = crop.y + offsetY;
-								const effCropMaxY = crop.y + crop.height + offsetY;
-								regionFocus = {
-									cx: Math.max(effCropMinX, Math.min(regionFocus.cx, effCropMaxX)),
-									cy: Math.max(effCropMinY, Math.min(regionFocus.cy, effCropMaxY)),
-								};
-
-								// Shift mask container to match effective crop position
-								const maskStageW = baseMaskRef.current.width;
-								const maskStageH = baseMaskRef.current.height;
-								const maskContainer = maskContainerRef.current;
-								if (maskContainer && maskStageW > 0 && maskStageH > 0) {
-									maskContainer.position.set(
-										offsetX * (maskStageW / crop.width),
-										offsetY * (maskStageH / crop.height),
-									);
-								}
-							}
-						}
-					}
-
-					// Reset mask container when mode is not "follow"
-					if (region.mode !== "follow") {
-						if (maskContainerRef.current) {
-							maskContainerRef.current.position.set(0, 0);
-						}
-						cropFollowOffsetRef.current = { x: 0, y: 0 };
 					}
 
 					targetScaleFactor = zoomScale;
 					targetFocus = regionFocus;
 					targetProgress = strength;
-				} else {
-					// Not zoomed — reset mask container and offset
-					if (maskContainerRef.current) {
-						maskContainerRef.current.position.set(0, 0);
-					}
-					cropFollowOffsetRef.current = { x: 0, y: 0 };
 				}
 
 				const state = animationStateRef.current;

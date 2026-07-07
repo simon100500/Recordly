@@ -14,6 +14,8 @@ import { clampFocusToScale } from "./focusUtils";
 export const SNAP_TO_EDGES_RATIO_MANUAL = 0.25;
 /** Snap ratio for system/auto zoom regions */
 export const SNAP_TO_EDGES_RATIO_AUTO = 0.25;
+/** Snap ratio for "follow" zoom regions — tighter tracking than auto */
+export const SNAP_TO_EDGES_RATIO_FOLLOW = 0.4;
 
 export interface CursorFollowCameraState {
 	/** Whether the state has been initialized with a starting position */
