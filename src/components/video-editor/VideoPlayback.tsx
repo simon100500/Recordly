@@ -167,8 +167,8 @@ import {
 	createCursorFollowCameraState,
 	resetCursorFollowCamera,
 	SNAP_TO_EDGES_RATIO_AUTO,
-	SNAP_TO_EDGES_RATIO_FOLLOW,
 } from "./videoPlayback/cursorFollowCamera";
+import { interpolateCursorPosition } from "./videoPlayback/cursorRenderer";
 import { clampFocusToStage as clampFocusToStageUtil } from "./videoPlayback/focusUtils";
 import { layoutVideoContent as layoutVideoContentUtil } from "./videoPlayback/layoutUtils";
 import { updateOverlayIndicator } from "./videoPlayback/overlayUtils";
@@ -598,6 +598,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		const cropRegionRef = useRef<import("./types").CropRegion | undefined>(cropRegion);
 		const maskGraphicsRef = useRef<Graphics | null>(null);
 		const maskContainerRef = useRef<Container | null>(null);
+		const cropPanOffsetRef = useRef({ x: 0, y: 0 });
 		const frameSpriteRef = useRef<Sprite | null>(null);
 		const frameContainerRef = useRef<Container | null>(null);
 		const frameIdRef = useRef<string | null>(frame);
@@ -2479,35 +2480,125 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				const hasSelectedZoom = selectedId !== null;
 				const shouldShowUnzoomedView = hasSelectedZoom && !isPlayingRef.current;
 
+				const baseMask = baseMaskRef.current;
+				let overlayViewport = baseMask;
+
 				if (region && strength > 0 && !shouldShowUnzoomedView) {
 					const zoomScale = blendedScale ?? ZOOM_DEPTH_SCALES[region.depth];
 
-					// Cursor follow: use cursor-follow camera for non-manual zoom regions
 					let regionFocus = region.focus;
+					let cropPanApplied = false;
+
 					if (
 						!zoomClassicModeRef.current &&
 						region.mode !== "manual" &&
 						cursorTelemetryRef.current.length > 0
 					) {
-						regionFocus = computeCursorFollowFocus(
-							cursorFollowCameraRef.current,
-							cursorTelemetryRef.current,
-							currentTimeRef.current,
-							zoomScale,
-							strength,
-							region.focus,
-							{
-								snapToEdgesRatio:
-									region.mode === "follow"
-										? SNAP_TO_EDGES_RATIO_FOLLOW
-										: SNAP_TO_EDGES_RATIO_AUTO,
-							},
-						);
+						if (region.mode === "follow") {
+							const crop = cropRegionRef.current ?? {
+								x: 0,
+								y: 0,
+								width: 1,
+								height: 1,
+							};
+							const cursorPos = interpolateCursorPosition(
+								cursorTelemetryRef.current,
+								currentTimeRef.current,
+							);
+							if (
+								cursorPos &&
+								crop.width > 0 &&
+								crop.height > 0 &&
+								baseMask.width > 0 &&
+								baseMask.height > 0
+							) {
+								const prev = cropPanOffsetRef.current;
+								const effX = crop.x + prev.x;
+								const effY = crop.y + prev.y;
+								const relX = (cursorPos.cx - effX) / crop.width;
+								const relY = (cursorPos.cy - effY) / crop.height;
+								const deadMin = 0.25;
+								const deadMax = 0.75;
+								let targetOffsetX = prev.x;
+								let targetOffsetY = prev.y;
+								if (relX < deadMin) {
+									targetOffsetX -= (deadMin - relX) * crop.width;
+								} else if (relX > deadMax) {
+									targetOffsetX += (relX - deadMax) * crop.width;
+								}
+								if (relY < deadMin) {
+									targetOffsetY -= (deadMin - relY) * crop.height;
+								} else if (relY > deadMax) {
+									targetOffsetY += (relY - deadMax) * crop.height;
+								}
+								targetOffsetX = Math.max(
+									-crop.x,
+									Math.min(targetOffsetX, 1 - crop.x - crop.width),
+								);
+								targetOffsetY = Math.max(
+									-crop.y,
+									Math.min(targetOffsetY, 1 - crop.y - crop.height),
+								);
+								const smoothFactor = 0.12;
+								const offsetX = prev.x + (targetOffsetX - prev.x) * smoothFactor;
+								const offsetY = prev.y + (targetOffsetY - prev.y) * smoothFactor;
+								cropPanOffsetRef.current = { x: offsetX, y: offsetY };
+
+								const fadeX = offsetX * strength;
+								const fadeY = offsetY * strength;
+								const fullVDW = baseMask.width / crop.width;
+								const fullVDH = baseMask.height / crop.height;
+								const sprite = videoSpriteRef.current;
+								if (sprite) {
+									sprite.position.set(
+										baseOffsetRef.current.x - fadeX * fullVDW,
+										baseOffsetRef.current.y - fadeY * fullVDH,
+									);
+								}
+
+								overlayViewport = {
+									...baseMask,
+									sourceCrop: {
+										x: crop.x + fadeX,
+										y: crop.y + fadeY,
+										width: crop.width,
+										height: crop.height,
+									},
+								};
+
+								regionFocus = { cx: 0.5, cy: 0.5 };
+								cropPanApplied = true;
+							}
+						} else {
+							regionFocus = computeCursorFollowFocus(
+								cursorFollowCameraRef.current,
+								cursorTelemetryRef.current,
+								currentTimeRef.current,
+								zoomScale,
+								strength,
+								region.focus,
+								{ snapToEdgesRatio: SNAP_TO_EDGES_RATIO_AUTO },
+							);
+						}
+					}
+
+					if (!cropPanApplied) {
+						const sprite = videoSpriteRef.current;
+						if (sprite) {
+							sprite.position.set(baseOffsetRef.current.x, baseOffsetRef.current.y);
+						}
+						cropPanOffsetRef.current = { x: 0, y: 0 };
 					}
 
 					targetScaleFactor = zoomScale;
 					targetFocus = regionFocus;
 					targetProgress = strength;
+				} else {
+					const sprite = videoSpriteRef.current;
+					if (sprite) {
+						sprite.position.set(baseOffsetRef.current.x, baseOffsetRef.current.y);
+					}
+					cropPanOffsetRef.current = { x: 0, y: 0 };
 				}
 
 				const state = animationStateRef.current;
@@ -2602,7 +2693,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 					cursorOverlay.update(
 						telemetry,
 						timeMs,
-						baseMaskRef.current,
+						overlayViewport,
 						showCursorRef.current,
 						!isPlayingRef.current || isSeekingRef.current,
 					);
@@ -2610,7 +2701,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 					smoothedCursorForHooks = mapSmoothedCursorToCanvasNormalized(
 						cursorOverlay.getSmoothedCursorSnapshot(),
 						{
-							maskRect: baseMaskRef.current,
+							maskRect: overlayViewport,
 							canvasWidth: extensionCanvasWidth,
 							canvasHeight: extensionCanvasHeight,
 						},
@@ -2644,7 +2735,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 										interactionType: p.interactionType,
 									},
 									{
-										maskRect: baseMaskRef.current,
+										maskRect: overlayViewport,
 										canvasWidth: extensionCanvasWidth,
 										canvasHeight: extensionCanvasHeight,
 									},
