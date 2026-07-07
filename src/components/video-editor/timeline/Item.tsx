@@ -31,6 +31,7 @@ interface ItemProps {
 }
 
 const ZOOM_LABELS: Record<number, string> = {
+	0: "1×",
 	1: "1.25×",
 	2: "1.5×",
 	3: "1.8×",

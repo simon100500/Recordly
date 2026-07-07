@@ -832,6 +832,7 @@ interface SettingsPanelProps {
 }
 
 const ZOOM_DEPTH_OPTIONS: Array<{ depth: ZoomDepth; label: string }> = [
+	{ depth: 0, label: "1×" },
 	{ depth: 1, label: "1.25×" },
 	{ depth: 2, label: "1.5×" },
 	{ depth: 3, label: "1.8×" },

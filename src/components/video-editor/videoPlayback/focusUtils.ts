@@ -40,6 +40,10 @@ function getFocusBounds(depth: ZoomDepth) {
 }
 
 function getFocusBoundsForScale(zoomScale: number) {
+	if (zoomScale <= 1) {
+		return { minX: 0, maxX: 1, minY: 0, maxY: 1 };
+	}
+
 	const marginX = 1 / (2 * zoomScale);
 	const marginY = 1 / (2 * zoomScale);
 

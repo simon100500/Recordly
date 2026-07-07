@@ -1,4 +1,4 @@
-export type ZoomDepth = 1 | 2 | 3 | 4 | 5 | 6;
+export type ZoomDepth = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
 export interface ZoomFocus {
 	cx: number; // normalized horizontal center (0-1)
@@ -639,6 +639,7 @@ export const SPEED_OPTIONS: Array<{ speed: PlaybackSpeed; label: string }> = [
 export const DEFAULT_PLAYBACK_SPEED: PlaybackSpeed = 1.5;
 
 export const ZOOM_DEPTH_SCALES: Record<ZoomDepth, number> = {
+	0: 1.0,
 	1: 1.25,
 	2: 1.5,
 	3: 1.8,
