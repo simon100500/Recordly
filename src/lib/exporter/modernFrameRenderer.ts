@@ -38,6 +38,7 @@ import {
 	DEFAULT_CURSOR_CONFIG,
 	PixiCursorOverlay,
 	preloadCursorAssets,
+	interpolateCursorPosition,
 } from "@/components/video-editor/videoPlayback/cursorRenderer";
 import {
 	computePaddedLayout,
@@ -505,6 +506,7 @@ export class FrameRenderer {
 	private compositeCtx: CanvasRenderingContext2D | null = null;
 	private lastEmittedClickTimeMs = -1;
 	private cleanupWebcamSource: (() => void) | null = null;
+	private cropPanSpring: SpringState;
 
 	constructor(config: FrameRenderConfig) {
 		this.config = config;
@@ -514,6 +516,7 @@ export class FrameRenderer {
 		this.springX = createSpringState(0);
 		this.springY = createSpringState(0);
 		this.cursorFollowCamera = createCursorFollowCameraState();
+		this.cropPanSpring = createSpringState(0);
 	}
 
 	private shouldUseZoomMotionBlur(): boolean {
@@ -3038,6 +3041,8 @@ export class FrameRenderer {
 			frameTimeMs: timeMs,
 		});
 
+		this.applyContentPan();
+
 		if (includeOverlayLayers) {
 			this.updateAnnotationLayer(timeMs);
 			this.updateCaptionLayer(timeMs);
@@ -3291,6 +3296,7 @@ export class FrameRenderer {
 			frameTimeMs: timeMs,
 		});
 
+		this.applyContentPan();
 		this.updateAnnotationLayer(timeMs);
 		this.updateCaptionLayer(timeMs);
 		this.updateWebcamOverlay();
@@ -3793,6 +3799,44 @@ export class FrameRenderer {
 			massMultiplier: this.config.cameraSpringMassMultiplier,
 		});
 
+		// Crop-follow mode (depth=0): shift crop zone to keep cursor visible
+		const isCropFollow = region !== null && strength > 0 && (blendedScale ?? ZOOM_DEPTH_SCALES[region.depth]) <= 1;
+		if (isCropFollow) {
+			const crop = this.layoutCache!.maskRect.sourceCrop;
+			const telemetry = this.config.cursorTelemetry ?? [];
+			if (crop && telemetry.length > 0) {
+				const cursor = interpolateCursorPosition(telemetry, timeMs);
+				if (cursor) {
+					const safeRatio = 0.25;
+					const cropW = crop.width;
+					const maxCropX = 1 - cropW;
+					const staticCropX = this.config.cropRegion?.x ?? crop.x;
+
+					const effectiveCropX = staticCropX + this.cropPanSpring.value;
+					const safeZone = cropW * safeRatio;
+					const safeLeft = effectiveCropX + safeZone;
+					const safeRight = effectiveCropX + cropW - safeZone;
+
+					let targetDelta = this.cropPanSpring.value;
+					if (cursor.cx < safeLeft) {
+						targetDelta = cursor.cx - safeLeft + this.cropPanSpring.value;
+					} else if (cursor.cx > safeRight) {
+						targetDelta = cursor.cx - safeRight + this.cropPanSpring.value;
+					}
+					const clampedTargetX = Math.max(0, Math.min(maxCropX, staticCropX + targetDelta));
+					targetDelta = clampedTargetX - staticCropX;
+
+					stepSpringValue(this.cropPanSpring, targetDelta, deltaMs, zoomSpringConfig);
+				}
+			}
+
+			projectedTransform.scale = 1;
+			projectedTransform.x = 0;
+			projectedTransform.y = 0;
+		} else {
+			stepSpringValue(this.cropPanSpring, 0, deltaMs, zoomSpringConfig);
+		}
+
 		if (this.config.zoomClassicMode) {
 			state.appliedScale = projectedTransform.scale;
 			state.x = projectedTransform.x;
@@ -3826,6 +3870,36 @@ export class FrameRenderer {
 			Math.abs(state.x - previousX) / Math.max(1, this.layoutCache.stageSize.width),
 			Math.abs(state.y - previousY) / Math.max(1, this.layoutCache.stageSize.height),
 		);
+	}
+
+	private applyContentPan(): void {
+		if (!this.videoSprite || !this.layoutCache) {
+			return;
+		}
+
+		const deltaX = this.cropPanSpring.value;
+		const crop = this.layoutCache.maskRect.sourceCrop;
+		if (!crop) return;
+
+		const staticCropX = this.config.cropRegion?.x ?? crop.x;
+
+		if (Math.abs(deltaX) > 0.0001) {
+			const scale = this.layoutCache.baseScale;
+			const videoW = this.config.videoWidth;
+
+			this.videoSprite.position.set(
+				this.layoutCache.baseOffset.x - deltaX * videoW * scale,
+				this.layoutCache.baseOffset.y,
+			);
+
+			crop.x = staticCropX + deltaX;
+		} else {
+			this.videoSprite.position.set(
+				this.layoutCache.baseOffset.x,
+				this.layoutCache.baseOffset.y,
+			);
+			crop.x = staticCropX;
+		}
 	}
 
 	private closeWebcamDecodedFrame(): void {
