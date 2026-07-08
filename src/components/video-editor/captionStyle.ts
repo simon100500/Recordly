@@ -14,9 +14,10 @@ export function getCaptionScaledFontSize(
 	fontSize: number,
 	containerWidth: number,
 	maxWidthPercent: number,
+	minFontSize: number = 14,
 ) {
 	return Math.max(
-		14,
+		minFontSize,
 		fontSize *
 			(getCaptionTargetWidth(containerWidth, maxWidthPercent) /
 				DEFAULT_CAPTION_REFERENCE_WIDTH),

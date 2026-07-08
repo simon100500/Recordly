@@ -1693,10 +1693,13 @@ export class FrameRenderer {
 		}
 
 		const fontFamily = settings.fontFamily || getDefaultCaptionFontFamily();
+		const previewWidth = this.config.previewWidth || 1920;
+		const minFontSize = (14 * this.config.width) / previewWidth;
 		const fontSize = getCaptionScaledFontSize(
 			settings.fontSize,
 			this.config.width,
 			settings.maxWidth,
+			minFontSize,
 		);
 		measureCtx.font = `${CAPTION_FONT_WEIGHT} ${fontSize}px ${fontFamily}`;
 

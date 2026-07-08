@@ -22,6 +22,7 @@ export function renderCaptions(
 	width: number,
 	height: number,
 	timeMs: number,
+	previewWidth: number = 1920,
 ) {
 	if (!settings.enabled || cues.length === 0) {
 		return;
@@ -29,7 +30,12 @@ export function renderCaptions(
 
 	ctx.save();
 
-	const fontSize = getCaptionScaledFontSize(settings.fontSize, width, settings.maxWidth);
+	const fontSize = getCaptionScaledFontSize(
+		settings.fontSize,
+		width,
+		settings.maxWidth,
+		(14 * width) / previewWidth,
+	);
 	ctx.font = `${CAPTION_FONT_WEIGHT} ${fontSize}px ${getDefaultCaptionFontFamily()}`;
 	const padding = getCaptionPadding(fontSize);
 

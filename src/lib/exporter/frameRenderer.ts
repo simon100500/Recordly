@@ -1573,6 +1573,7 @@ export class FrameRenderer {
 					this.config.width,
 					this.config.height,
 					temporalSnapshot.timeMs,
+					this.config.previewWidth || 1920,
 				);
 			}
 
@@ -1766,6 +1767,7 @@ export class FrameRenderer {
 				this.config.width,
 				this.config.height,
 				timeMs,
+				this.config.previewWidth || 1920,
 			);
 		}
 
