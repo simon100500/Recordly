@@ -103,7 +103,8 @@
   },
   "win": {
     "target": [
-      "nsis"
+      "nsis",
+      "msi"
     ],
     "icon": "icons/icons/win/icon.ico"
     ,
