@@ -1972,7 +1972,7 @@ export class FrameRenderer {
 				y: layout.centerOffsetY,
 				width: layout.croppedDisplayWidth,
 				height: layout.croppedDisplayHeight,
-				sourceCrop: cropRegion,
+				sourceCrop: cropRegion ? { ...cropRegion } : cropRegion,
 			},
 		};
 	}
