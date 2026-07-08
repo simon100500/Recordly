@@ -161,6 +161,7 @@ import {
 	getClipSourceEndMs,
 	getDefaultCaptionFontFamily,
 } from "./types";
+import { stepCropPanFollow } from "./videoPlayback/cropPanFollow";
 import {
 	type CursorFollowCameraState,
 	computeCursorFollowFocus,
@@ -2512,62 +2513,30 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 								baseMask.width > 0 &&
 								baseMask.height > 0
 							) {
-								const prev = cropPanOffsetRef.current;
-								const effX = crop.x + prev.x;
-								const effY = crop.y + prev.y;
-								const relX = (cursorPos.cx - effX) / crop.width;
-								const relY = (cursorPos.cy - effY) / crop.height;
-								const deadMin = 0.25;
-								const deadMax = 0.75;
-								let targetOffsetX = prev.x;
-								let targetOffsetY = prev.y;
-								if (relX < deadMin) {
-									targetOffsetX -= (deadMin - relX) * crop.width;
-								} else if (relX > deadMax) {
-									targetOffsetX += (relX - deadMax) * crop.width;
+								const step = stepCropPanFollow({
+									cursor: cursorPos,
+									crop,
+									prevOffset: cropPanOffsetRef.current,
+									strength,
+								});
+								if (step) {
+									cropPanOffsetRef.current = step.offset;
+									const fullVDW = baseMask.width / crop.width;
+									const fullVDH = baseMask.height / crop.height;
+									const sprite = videoSpriteRef.current;
+									if (sprite) {
+										sprite.position.set(
+											baseOffsetRef.current.x - step.fade.x * fullVDW,
+											baseOffsetRef.current.y - step.fade.y * fullVDH,
+										);
+									}
+									overlayViewport = {
+										...baseMask,
+										sourceCrop: step.effectiveCrop,
+									};
+									regionFocus = step.focus;
+									cropPanApplied = true;
 								}
-								if (relY < deadMin) {
-									targetOffsetY -= (deadMin - relY) * crop.height;
-								} else if (relY > deadMax) {
-									targetOffsetY += (relY - deadMax) * crop.height;
-								}
-								targetOffsetX = Math.max(
-									-crop.x,
-									Math.min(targetOffsetX, 1 - crop.x - crop.width),
-								);
-								targetOffsetY = Math.max(
-									-crop.y,
-									Math.min(targetOffsetY, 1 - crop.y - crop.height),
-								);
-								const smoothFactor = 0.12;
-								const offsetX = prev.x + (targetOffsetX - prev.x) * smoothFactor;
-								const offsetY = prev.y + (targetOffsetY - prev.y) * smoothFactor;
-								cropPanOffsetRef.current = { x: offsetX, y: offsetY };
-
-								const fadeX = offsetX * strength;
-								const fadeY = offsetY * strength;
-								const fullVDW = baseMask.width / crop.width;
-								const fullVDH = baseMask.height / crop.height;
-								const sprite = videoSpriteRef.current;
-								if (sprite) {
-									sprite.position.set(
-										baseOffsetRef.current.x - fadeX * fullVDW,
-										baseOffsetRef.current.y - fadeY * fullVDH,
-									);
-								}
-
-								overlayViewport = {
-									...baseMask,
-									sourceCrop: {
-										x: crop.x + fadeX,
-										y: crop.y + fadeY,
-										width: crop.width,
-										height: crop.height,
-									},
-								};
-
-								regionFocus = { cx: 0.5, cy: 0.5 };
-								cropPanApplied = true;
 							}
 						} else {
 							regionFocus = computeCursorFollowFocus(

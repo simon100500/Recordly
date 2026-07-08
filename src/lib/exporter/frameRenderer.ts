@@ -23,6 +23,10 @@ import {
 } from "@/components/video-editor/types";
 import { DEFAULT_FOCUS } from "@/components/video-editor/videoPlayback/constants";
 import {
+	type CropPanOffset,
+	stepCropPanFollow,
+} from "@/components/video-editor/videoPlayback/cropPanFollow";
+import {
 	type CursorFollowCameraState,
 	computeCursorFollowFocus,
 	createCursorFollowCameraState,
@@ -30,6 +34,7 @@ import {
 } from "@/components/video-editor/videoPlayback/cursorFollowCamera";
 import {
 	DEFAULT_CURSOR_CONFIG,
+	interpolateCursorPosition,
 	PixiCursorOverlay,
 	preloadCursorAssets,
 } from "@/components/video-editor/videoPlayback/cursorRenderer";
@@ -293,6 +298,8 @@ export class FrameRenderer {
 	private springX: SpringState;
 	private springY: SpringState;
 	private cursorFollowCamera: CursorFollowCameraState;
+	private cropFollowOffset: CropPanOffset = { x: 0, y: 0 };
+	private cropFollowFade: CropPanOffset = { x: 0, y: 0 };
 	private lastContentTimeMs: number | null = null;
 	private cursorOverlay: PixiCursorOverlay | null = null;
 	private webcamForwardFrameSource: ForwardFrameSource | null = null;
@@ -1681,6 +1688,8 @@ export class FrameRenderer {
 			this.updateAnimationState(timeMs);
 		}
 
+		this.applyFollowContentPan();
+
 		applyZoomTransform({
 			cameraContainer: this.cameraContainer,
 			zoomBlurFilter: this.zoomBlurFilter,
@@ -1968,6 +1977,23 @@ export class FrameRenderer {
 		};
 	}
 
+	private applyFollowContentPan(): void {
+		if (!this.videoSprite || !this.layoutCache) return;
+		const crop = this.layoutCache.maskRect.sourceCrop;
+		if (!crop) return;
+		const fade = this.cropFollowFade;
+		if (Math.abs(fade.x) <= 0.0001 && Math.abs(fade.y) <= 0.0001) return;
+
+		const fullVDW = this.layoutCache.maskRect.width / crop.width;
+		const fullVDH = this.layoutCache.maskRect.height / crop.height;
+		this.videoSprite.position.set(
+			this.layoutCache.baseOffset.x - fade.x * fullVDW,
+			this.layoutCache.baseOffset.y - fade.y * fullVDH,
+		);
+		crop.x = (this.config.cropRegion?.x ?? crop.x) + fade.x;
+		crop.y = (this.config.cropRegion?.y ?? crop.y) + fade.y;
+	}
+
 	private updateAnimationState(timeMs: number): number {
 		if (!this.cameraContainer || !this.layoutCache) return 0;
 
@@ -1991,22 +2017,42 @@ export class FrameRenderer {
 
 			// Cursor follow: use cursor-follow camera for non-manual zoom regions
 			let regionFocus = region.focus;
+			let followFade: CropPanOffset | null = null;
 			if (
 				!this.config.zoomClassicMode &&
 				region.mode !== "manual" &&
 				this.config.cursorTelemetry &&
 				this.config.cursorTelemetry.length > 0
 			) {
-				regionFocus = computeCursorFollowFocus(
-					this.cursorFollowCamera,
-					this.config.cursorTelemetry,
-					timeMs,
-					zoomScale,
-					strength,
-					region.focus,
-					{ snapToEdgesRatio: SNAP_TO_EDGES_RATIO_AUTO },
-				);
+				if (region.mode === "follow") {
+					const crop = this.config.cropRegion ?? { x: 0, y: 0, width: 1, height: 1 };
+					const cursor = interpolateCursorPosition(this.config.cursorTelemetry, timeMs);
+					if (cursor) {
+						const step = stepCropPanFollow({
+							cursor,
+							crop,
+							prevOffset: this.cropFollowOffset,
+							strength,
+						});
+						if (step) {
+							this.cropFollowOffset = step.offset;
+							followFade = step.fade;
+							regionFocus = step.focus;
+						}
+					}
+				} else {
+					regionFocus = computeCursorFollowFocus(
+						this.cursorFollowCamera,
+						this.config.cursorTelemetry,
+						timeMs,
+						zoomScale,
+						strength,
+						region.focus,
+						{ snapToEdgesRatio: SNAP_TO_EDGES_RATIO_AUTO },
+					);
+				}
 			}
+			this.cropFollowFade = followFade ?? { x: 0, y: 0 };
 
 			targetScaleFactor = zoomScale;
 			targetFocus = regionFocus;

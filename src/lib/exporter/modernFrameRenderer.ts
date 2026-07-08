@@ -29,6 +29,10 @@ import type {
 import { getDefaultCaptionFontFamily, ZOOM_DEPTH_SCALES } from "@/components/video-editor/types";
 import { DEFAULT_FOCUS } from "@/components/video-editor/videoPlayback/constants";
 import {
+	type CropPanOffset,
+	stepCropPanFollow,
+} from "@/components/video-editor/videoPlayback/cropPanFollow";
+import {
 	type CursorFollowCameraState,
 	computeCursorFollowFocus,
 	createCursorFollowCameraState,
@@ -36,9 +40,9 @@ import {
 } from "@/components/video-editor/videoPlayback/cursorFollowCamera";
 import {
 	DEFAULT_CURSOR_CONFIG,
+	interpolateCursorPosition,
 	PixiCursorOverlay,
 	preloadCursorAssets,
-	interpolateCursorPosition,
 } from "@/components/video-editor/videoPlayback/cursorRenderer";
 import {
 	computePaddedLayout,
@@ -507,6 +511,8 @@ export class FrameRenderer {
 	private lastEmittedClickTimeMs = -1;
 	private cleanupWebcamSource: (() => void) | null = null;
 	private cropPanSpring: SpringState;
+	private cropFollowOffset: CropPanOffset = { x: 0, y: 0 };
+	private cropFollowFade: CropPanOffset = { x: 0, y: 0 };
 
 	constructor(config: FrameRenderConfig) {
 		this.config = config;
@@ -3746,22 +3752,42 @@ export class FrameRenderer {
 
 			// Cursor follow: use cursor-follow camera for non-manual zoom regions
 			let regionFocus = region.focus;
+			let followFade: CropPanOffset | null = null;
 			if (
 				!this.config.zoomClassicMode &&
 				region.mode !== "manual" &&
 				this.config.cursorTelemetry &&
 				this.config.cursorTelemetry.length > 0
 			) {
-				regionFocus = computeCursorFollowFocus(
-					this.cursorFollowCamera,
-					this.config.cursorTelemetry,
-					timeMs,
-					zoomScale,
-					strength,
-					region.focus,
-					{ snapToEdgesRatio: SNAP_TO_EDGES_RATIO_AUTO },
-				);
+				if (region.mode === "follow") {
+					const crop = this.config.cropRegion ?? { x: 0, y: 0, width: 1, height: 1 };
+					const cursor = interpolateCursorPosition(this.config.cursorTelemetry, timeMs);
+					if (cursor) {
+						const step = stepCropPanFollow({
+							cursor,
+							crop,
+							prevOffset: this.cropFollowOffset,
+							strength,
+						});
+						if (step) {
+							this.cropFollowOffset = step.offset;
+							followFade = step.fade;
+							regionFocus = step.focus;
+						}
+					}
+				} else {
+					regionFocus = computeCursorFollowFocus(
+						this.cursorFollowCamera,
+						this.config.cursorTelemetry,
+						timeMs,
+						zoomScale,
+						strength,
+						region.focus,
+						{ snapToEdgesRatio: SNAP_TO_EDGES_RATIO_AUTO },
+					);
+				}
 			}
+			this.cropFollowFade = followFade ?? { x: 0, y: 0 };
 
 			targetScaleFactor = zoomScale;
 			targetFocus = regionFocus;
@@ -3800,7 +3826,11 @@ export class FrameRenderer {
 		});
 
 		// Crop-follow mode (depth=0): shift crop zone to keep cursor visible
-		const isCropFollow = region !== null && strength > 0 && (blendedScale ?? ZOOM_DEPTH_SCALES[region.depth]) <= 1;
+		const isCropFollow =
+			region !== null &&
+			strength > 0 &&
+			region.mode !== "follow" &&
+			(blendedScale ?? ZOOM_DEPTH_SCALES[region.depth]) <= 1;
 		if (isCropFollow) {
 			const crop = this.layoutCache!.maskRect.sourceCrop;
 			const telemetry = this.config.cursorTelemetry ?? [];
@@ -3823,7 +3853,10 @@ export class FrameRenderer {
 					} else if (cursor.cx > safeRight) {
 						targetDelta = cursor.cx - safeRight + this.cropPanSpring.value;
 					}
-					const clampedTargetX = Math.max(0, Math.min(maxCropX, staticCropX + targetDelta));
+					const clampedTargetX = Math.max(
+						0,
+						Math.min(maxCropX, staticCropX + targetDelta),
+					);
 					targetDelta = clampedTargetX - staticCropX;
 
 					stepSpringValue(this.cropPanSpring, targetDelta, deltaMs, zoomSpringConfig);
@@ -3877,12 +3910,31 @@ export class FrameRenderer {
 			return;
 		}
 
-		const deltaX = this.cropPanSpring.value;
 		const crop = this.layoutCache.maskRect.sourceCrop;
 		if (!crop) return;
 
 		const staticCropX = this.config.cropRegion?.x ?? crop.x;
+		const staticCropY = this.config.cropRegion?.y ?? crop.y;
 
+		// Follow crop-pan (X + Y)
+		const fade = this.cropFollowFade;
+		if (Math.abs(fade.x) > 0.0001 || Math.abs(fade.y) > 0.0001) {
+			const scale = this.layoutCache.baseScale;
+			const videoW = this.config.videoWidth;
+			const videoH = this.config.videoHeight;
+
+			this.videoSprite.position.set(
+				this.layoutCache.baseOffset.x - fade.x * videoW * scale,
+				this.layoutCache.baseOffset.y - fade.y * videoH * scale,
+			);
+
+			crop.x = staticCropX + fade.x;
+			crop.y = staticCropY + fade.y;
+			return;
+		}
+
+		// Depth-0 crop-pan (X only)
+		const deltaX = this.cropPanSpring.value;
 		if (Math.abs(deltaX) > 0.0001) {
 			const scale = this.layoutCache.baseScale;
 			const videoW = this.config.videoWidth;
@@ -3893,12 +3945,14 @@ export class FrameRenderer {
 			);
 
 			crop.x = staticCropX + deltaX;
+			crop.y = staticCropY;
 		} else {
 			this.videoSprite.position.set(
 				this.layoutCache.baseOffset.x,
 				this.layoutCache.baseOffset.y,
 			);
 			crop.x = staticCropX;
+			crop.y = staticCropY;
 		}
 	}
 
