@@ -14,6 +14,8 @@ import { clampFocusToScale } from "./focusUtils";
 export const SNAP_TO_EDGES_RATIO_MANUAL = 0.25;
 /** Snap ratio for system/auto zoom regions */
 export const SNAP_TO_EDGES_RATIO_AUTO = 0.25;
+/** Default vertical snap ratio for cursor-follow safe zones */
+export const SNAP_TO_EDGES_RATIO_VERTICAL = 0.1;
 
 export interface CursorFollowCameraState {
 	/** Whether the state has been initialized with a starting position */
@@ -39,10 +41,13 @@ export interface CursorFollowConfig {
 	 * 0.25 for manual zooms, 0.25 for auto/system zooms.
 	 */
 	snapToEdgesRatio: number;
+	/** Optional vertical safe-zone edge ratio; defaults to 10%. */
+	verticalSnapToEdgesRatio?: number;
 }
 
 export const DEFAULT_CURSOR_FOLLOW_CONFIG: CursorFollowConfig = {
 	snapToEdgesRatio: SNAP_TO_EDGES_RATIO_AUTO,
+	verticalSnapToEdgesRatio: SNAP_TO_EDGES_RATIO_VERTICAL,
 };
 
 export function createCursorFollowCameraState(): CursorFollowCameraState {
@@ -85,17 +90,19 @@ function recenterFocusWhenCursorLeavesSafeZone(
 	currentFocus: ZoomFocus,
 	cursorFocus: ZoomFocus,
 	zoomScale: number,
-	safeZoneRatio: number,
+	horizontalSafeZoneRatio: number,
+	verticalSafeZoneRatio: number,
 	cropRegion?: CropRegion,
 ): ZoomFocus {
 	const halfSpan = getVisibleHalfSpan(zoomScale);
 	const visibleSpan = halfSpan * 2;
-	const safeZoneInset = visibleSpan * clampSafeZoneRatio(safeZoneRatio);
+	const safeZoneInsetX = visibleSpan * clampSafeZoneRatio(horizontalSafeZoneRatio);
+	const safeZoneInsetY = visibleSpan * clampSafeZoneRatio(verticalSafeZoneRatio);
 
-	const safeLeft = currentFocus.cx - halfSpan + safeZoneInset;
-	const safeRight = currentFocus.cx + halfSpan - safeZoneInset;
-	const safeTop = currentFocus.cy - halfSpan + safeZoneInset;
-	const safeBottom = currentFocus.cy + halfSpan - safeZoneInset;
+	const safeLeft = currentFocus.cx - halfSpan + safeZoneInsetX;
+	const safeRight = currentFocus.cx + halfSpan - safeZoneInsetX;
+	const safeTop = currentFocus.cy - halfSpan + safeZoneInsetY;
+	const safeBottom = currentFocus.cy + halfSpan - safeZoneInsetY;
 
 	let nextFocusX = currentFocus.cx;
 	let nextFocusY = currentFocus.cy;
@@ -107,9 +114,9 @@ function recenterFocusWhenCursorLeavesSafeZone(
 	}
 
 	if (cursorFocus.cy < safeTop) {
-		nextFocusY = cursorFocus.cy;
+		nextFocusY = cursorFocus.cy + halfSpan - safeZoneInsetY;
 	} else if (cursorFocus.cy > safeBottom) {
-		nextFocusY = cursorFocus.cy;
+		nextFocusY = cursorFocus.cy - halfSpan + safeZoneInsetY;
 	}
 
 	return clampFocusToScale(
@@ -193,6 +200,7 @@ export function computeCursorFollowFocus(
 		{ cx: cursorPos.cx, cy: cursorPos.cy },
 		zoomScale,
 		config.snapToEdgesRatio,
+		config.verticalSnapToEdgesRatio ?? SNAP_TO_EDGES_RATIO_VERTICAL,
 		cropRegion,
 	);
 
