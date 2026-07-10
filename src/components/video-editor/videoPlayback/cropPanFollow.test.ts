@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_CROP_PAN_OFFSET, stepCropPanFollow } from "./cropPanFollow";
+import { DEFAULT_CROP_PAN_FOCUS, DEFAULT_CROP_PAN_OFFSET, stepCropPanFollow } from "./cropPanFollow";
 
 describe("stepCropPanFollow", () => {
 	const crop = { x: 0.1, y: 0.1, width: 0.8, height: 0.8 };
@@ -10,7 +10,9 @@ describe("stepCropPanFollow", () => {
 			cursor,
 			crop,
 			prevOffset: { x: 0, y: 0 },
+			prevFocus: DEFAULT_CROP_PAN_FOCUS,
 			strength: 1,
+			zoomScale: 2,
 			smoothFactor: 1,
 		});
 
@@ -30,7 +32,9 @@ describe("stepCropPanFollow", () => {
 			cursor,
 			crop,
 			prevOffset: { x: 0, y: 0 },
+			prevFocus: DEFAULT_CROP_PAN_FOCUS,
 			strength: 1,
+			zoomScale: 2,
 			smoothFactor: 1,
 		});
 
@@ -44,12 +48,14 @@ describe("stepCropPanFollow", () => {
 		);
 	});
 
-	it("keeps a full-height canvas stationary while the cursor is inside the safe zone", () => {
+	it("keeps a full-frame canvas stationary inside the safe zone", () => {
 		const result = stepCropPanFollow({
 			cursor: { cx: 0.5, cy: 0.5 },
 			crop: { x: 0, y: 0, width: 1, height: 1 },
 			prevOffset: DEFAULT_CROP_PAN_OFFSET,
+			prevFocus: DEFAULT_CROP_PAN_FOCUS,
 			strength: 1,
+			zoomScale: 2,
 			smoothFactor: 1,
 		});
 
@@ -57,39 +63,99 @@ describe("stepCropPanFollow", () => {
 		expect(result!.fade.y).toBe(0);
 		expect(result!.effectiveCrop.y).toBe(0);
 		expect(result!.cursorViewportOffset.y).toBe(0);
+		expect(result!.focus.cy).toBe(0.5);
 	});
 
-	it("does not pan or zoom-follow vertically on a horizontal crop (full height)", () => {
+	it("keeps focus centered while the cursor roams a horizontal crop's free axis", () => {
 		const horizontalCrop = { x: 0.15, y: 0, width: 0.7, height: 1 };
 
-		for (const cy of [0.95, 0.05, 0.5]) {
+		// zoomScale 1.5 → halfSpan ≈ 0.333, safeMargin ≈ 0.167
+		// safe zone from prevFocus 0.5 = [0.333, 0.667]
+		for (const cy of [0.4, 0.5, 0.6]) {
 			const result = stepCropPanFollow({
 				cursor: { cx: 0.5, cy },
 				crop: horizontalCrop,
 				prevOffset: DEFAULT_CROP_PAN_OFFSET,
+				prevFocus: DEFAULT_CROP_PAN_FOCUS,
 				strength: 1,
+				zoomScale: 1.5,
 				smoothFactor: 1,
 			});
 
 			expect(result).not.toBeNull();
 			expect(result!.fade.y).toBe(0);
-			expect(result!.cursorViewportOffset.y).toBe(0);
 			expect(result!.effectiveCrop.y).toBe(0);
 			expect(result!.focus.cy).toBe(0.5);
 		}
 	});
 
-	it("still zoom-follows vertically on full-frame (no crop)", () => {
+	it("shifts the focus when the cursor exits the safe zone on a free axis", () => {
+		const horizontalCrop = { x: 0.15, y: 0, width: 0.7, height: 1 };
+
+		// zoomScale 1.5 → halfSpan ≈ 0.333, safeMargin ≈ 0.167
+		// prevFocus 0.5 → safeMax = 0.667, cursor at 0.85 exits
+		// focus = 0.85 - 0.167 = 0.683, clamped to 1 - halfSpan = 0.667
 		const result = stepCropPanFollow({
-			cursor: { cx: 0.5, cy: 0.9 },
-			crop: { x: 0, y: 0, width: 1, height: 1 },
+			cursor: { cx: 0.5, cy: 0.85 },
+			crop: horizontalCrop,
 			prevOffset: DEFAULT_CROP_PAN_OFFSET,
+			prevFocus: { cx: 0.5, cy: 0.5 },
 			strength: 1,
+			zoomScale: 1.5,
 			smoothFactor: 1,
 		});
 
 		expect(result).not.toBeNull();
 		expect(result!.fade.y).toBe(0);
-		expect(result!.focus.cy).toBeCloseTo(0.9, 6);
+		expect(result!.focus.cy).toBeCloseTo(0.667, 2);
+		expect(result!.focus.cy).toBeGreaterThan(0.5);
+		expect(result!.focus.cy).toBeLessThan(0.85);
+	});
+
+	it("clamps the focus so the visible area never exceeds source bounds", () => {
+		const horizontalCrop = { x: 0.15, y: 0, width: 0.7, height: 1 };
+
+		// zoomScale 2 → halfSpan = 0.25, max focus = 0.75
+		const result = stepCropPanFollow({
+			cursor: { cx: 0.5, cy: 0.99 },
+			crop: horizontalCrop,
+			prevOffset: DEFAULT_CROP_PAN_OFFSET,
+			prevFocus: { cx: 0.5, cy: 0.5 },
+			strength: 1,
+			zoomScale: 2,
+			smoothFactor: 1,
+		});
+
+		expect(result).not.toBeNull();
+		expect(result!.focus.cy).toBeLessThanOrEqual(0.75);
+		expect(result!.focus.cy).toBeGreaterThanOrEqual(0.25);
+	});
+
+	it("holds the focus steady once the cursor returns inside the safe zone", () => {
+		const horizontalCrop = { x: 0.15, y: 0, width: 0.7, height: 1 };
+
+		// Step 1: cursor near bottom → focus shifts
+		const step1 = stepCropPanFollow({
+			cursor: { cx: 0.5, cy: 0.85 },
+			crop: horizontalCrop,
+			prevOffset: DEFAULT_CROP_PAN_OFFSET,
+			prevFocus: { cx: 0.5, cy: 0.5 },
+			strength: 1,
+			zoomScale: 1.5,
+			smoothFactor: 1,
+		})!;
+
+		// Step 2: cursor returns toward centre → focus should hold
+		const step2 = stepCropPanFollow({
+			cursor: { cx: 0.5, cy: 0.6 },
+			crop: horizontalCrop,
+			prevOffset: step1.offset,
+			prevFocus: step1.focus,
+			strength: 1,
+			zoomScale: 1.5,
+			smoothFactor: 1,
+		})!;
+
+		expect(step2.focus.cy).toBe(step1.focus.cy);
 	});
 });

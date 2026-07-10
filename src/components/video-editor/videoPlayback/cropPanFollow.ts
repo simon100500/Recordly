@@ -14,26 +14,65 @@ export interface CropPanStep {
 	sourceCropFade: CropPanOffset;
 	/** Canvas-only translation used when projecting cursor and overlay coordinates. */
 	cursorViewportOffset: CropPanOffset;
-	/** Camera focus (mask-relative). 0.5 when any crop is active, cursor only on full-frame */
+	/** Camera focus (mask-relative). 0.5 on panned axes, safe-zone tracked on free axes */
 	focus: ZoomFocus;
 	/** Effective crop region (base crop + fade) — use as the overlay viewport sourceCrop */
 	effectiveCrop: CropRegion;
+}
+
+const FOCUS_SAFE_ZONE_RATIO = 0.25;
+
+function getVisibleHalfSpan(zoomScale: number) {
+	return 1 / (2 * Math.max(1, zoomScale));
+}
+
+/**
+ * Lazy-camera focus for an axis where the crop has no pan room.
+ *
+ * The focus stays put while the cursor is inside a central safe zone.
+ * When the cursor exits, the focus shifts just enough to bring it back
+ * to the safe-zone boundary — so the cursor can reach the edge of the
+ * visible area without the canvas dragging it to centre.
+ */
+function computeAxisFocus(
+	prevFocus: number,
+	cursorFocus: number,
+	hasRoom: boolean,
+	zoomScale: number,
+): number {
+	if (hasRoom) return 0.5;
+
+	const halfSpan = getVisibleHalfSpan(zoomScale);
+	if (halfSpan >= 0.5) return 0.5;
+
+	const safeMargin = halfSpan * (1 - 2 * FOCUS_SAFE_ZONE_RATIO);
+	const safeMin = prevFocus - safeMargin;
+	const safeMax = prevFocus + safeMargin;
+
+	if (cursorFocus < safeMin) {
+		return Math.max(halfSpan, cursorFocus + safeMargin);
+	}
+	if (cursorFocus > safeMax) {
+		return Math.min(1 - halfSpan, cursorFocus - safeMargin);
+	}
+	return Math.max(halfSpan, Math.min(prevFocus, 1 - halfSpan));
 }
 
 /**
  * Crop-panning "follow" camera.
  *
  * Pans the visible crop window so the cursor stays inside an edge safe zone.
- * On axes where the crop has no pan room, the cursor simply moves freely to
- * the screen edge — the zoom stays centered instead of dragging the canvas.
- * Only when there's no crop at all (full frame) does the zoom follow the
- * cursor directly.
+ * On axes where the crop has no pan room, a lazy-camera safe zone lets the
+ * cursor roam freely in the centre and only shifts the zoom focus once it
+ * approaches the visible edge.
  */
 export function stepCropPanFollow(params: {
 	cursor: ZoomFocus;
 	crop: CropRegion;
 	prevOffset: CropPanOffset;
+	prevFocus: ZoomFocus;
 	strength: number;
+	zoomScale: number;
 	/** Horizontal edge safe-zone margin; defaults to 25%. */
 	deadZone?: number;
 	/** Vertical edge safe-zone margin; defaults to 10%. */
@@ -44,7 +83,9 @@ export function stepCropPanFollow(params: {
 		cursor,
 		crop,
 		prevOffset,
+		prevFocus,
 		strength,
+		zoomScale,
 		deadZone: horizontalDeadZone = 0.25,
 		verticalDeadZone = 0.1,
 		smoothFactor = 0.12,
@@ -81,9 +122,18 @@ export function stepCropPanFollow(params: {
 	const fadeX = hasRoomX ? offsetX * strength : 0;
 	const fadeY = hasRoomY ? offsetY * strength : 0;
 
-	const isFullFrame = !hasRoomX && !hasRoomY;
-	const focusX = isFullFrame ? (cursor.cx - crop.x) / crop.width : 0.5;
-	const focusY = isFullFrame ? (cursor.cy - crop.y) / crop.height : 0.5;
+	const focusX = computeAxisFocus(
+		prevFocus.cx,
+		(cursor.cx - crop.x) / crop.width,
+		hasRoomX,
+		zoomScale,
+	);
+	const focusY = computeAxisFocus(
+		prevFocus.cy,
+		(cursor.cy - crop.y) / crop.height,
+		hasRoomY,
+		zoomScale,
+	);
 
 	return {
 		offset: { x: offsetX, y: offsetY },
@@ -101,3 +151,4 @@ export function stepCropPanFollow(params: {
 }
 
 export const DEFAULT_CROP_PAN_OFFSET: CropPanOffset = { x: 0, y: 0 };
+export const DEFAULT_CROP_PAN_FOCUS: ZoomFocus = { cx: 0.5, cy: 0.5 };

@@ -601,6 +601,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		const maskGraphicsRef = useRef<Graphics | null>(null);
 		const maskContainerRef = useRef<Container | null>(null);
 		const cropPanOffsetRef = useRef({ x: 0, y: 0 });
+		const cropPanFocusRef = useRef({ cx: 0.5, cy: 0.5 });
 		const frameSpriteRef = useRef<Sprite | null>(null);
 		const frameContainerRef = useRef<Container | null>(null);
 		const frameIdRef = useRef<string | null>(frame);
@@ -2514,14 +2515,17 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 								baseMask.width > 0 &&
 								baseMask.height > 0
 							) {
-								const step = stepCropPanFollow({
-									cursor: cursorPos,
-									crop,
-									prevOffset: cropPanOffsetRef.current,
-									strength,
-								});
-								if (step) {
-									cropPanOffsetRef.current = step.offset;
+							const step = stepCropPanFollow({
+								cursor: cursorPos,
+								crop,
+								prevOffset: cropPanOffsetRef.current,
+								prevFocus: cropPanFocusRef.current,
+								strength,
+								zoomScale,
+							});
+							if (step) {
+								cropPanOffsetRef.current = step.offset;
+								cropPanFocusRef.current = step.focus;
 									const fullVDW = baseMask.width / crop.width;
 									const fullVDH = baseMask.height / crop.height;
 									const sprite = videoSpriteRef.current;
@@ -2558,10 +2562,11 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 						if (sprite) {
 							sprite.position.set(baseOffsetRef.current.x, baseOffsetRef.current.y);
 						}
-						cropPanOffsetRef.current = { x: 0, y: 0 };
-					}
+					cropPanOffsetRef.current = { x: 0, y: 0 };
+					cropPanFocusRef.current = { cx: 0.5, cy: 0.5 };
+				}
 
-					targetScaleFactor = zoomScale;
+				targetScaleFactor = zoomScale;
 					targetFocus = regionFocus;
 					targetProgress = strength;
 				} else {
@@ -2570,6 +2575,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 						sprite.position.set(baseOffsetRef.current.x, baseOffsetRef.current.y);
 					}
 					cropPanOffsetRef.current = { x: 0, y: 0 };
+					cropPanFocusRef.current = { cx: 0.5, cy: 0.5 };
 				}
 
 				const state = animationStateRef.current;

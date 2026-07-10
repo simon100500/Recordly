@@ -22,6 +22,7 @@ import type {
 	Padding,
 	SpeedRegion,
 	WebcamOverlaySettings,
+	ZoomFocus,
 	ZoomMotionBlurTuning,
 	ZoomRegion,
 	ZoomTransitionEasing,
@@ -516,6 +517,7 @@ export class FrameRenderer {
 	private cropFollowFade: CropPanOffset = { x: 0, y: 0 };
 	private cropFollowSourceCropFade: CropPanOffset = { x: 0, y: 0 };
 	private cropFollowCursorViewportOffset = { x: 0, y: 0 };
+	private cropFollowFocus: ZoomFocus = { cx: 0.5, cy: 0.5 };
 
 	constructor(config: FrameRenderConfig) {
 		this.config = config;
@@ -3770,14 +3772,17 @@ export class FrameRenderer {
 					const crop = this.config.cropRegion ?? { x: 0, y: 0, width: 1, height: 1 };
 					const cursor = interpolateCursorPosition(this.config.cursorTelemetry, timeMs);
 					if (cursor) {
-						const step = stepCropPanFollow({
-							cursor,
-							crop,
-							prevOffset: this.cropFollowOffset,
-							strength,
-						});
-						if (step) {
-							this.cropFollowOffset = step.offset;
+					const step = stepCropPanFollow({
+						cursor,
+						crop,
+						prevOffset: this.cropFollowOffset,
+						prevFocus: this.cropFollowFocus,
+						strength,
+						zoomScale,
+					});
+					if (step) {
+						this.cropFollowOffset = step.offset;
+						this.cropFollowFocus = step.focus;
 							followFade = step.fade;
 							followSourceCropFade = step.sourceCropFade;
 							followCursorViewportOffset = step.cursorViewportOffset;
@@ -3796,9 +3801,10 @@ export class FrameRenderer {
 					);
 				}
 			}
-			this.cropFollowFade = followFade ?? { x: 0, y: 0 };
-			this.cropFollowSourceCropFade = followSourceCropFade ?? { x: 0, y: 0 };
-			this.cropFollowCursorViewportOffset = followCursorViewportOffset ?? { x: 0, y: 0 };
+		this.cropFollowFade = followFade ?? { x: 0, y: 0 };
+		this.cropFollowSourceCropFade = followSourceCropFade ?? { x: 0, y: 0 };
+		this.cropFollowCursorViewportOffset = followCursorViewportOffset ?? { x: 0, y: 0 };
+		if (!followFade) this.cropFollowFocus = { cx: 0.5, cy: 0.5 };
 
 			targetScaleFactor = zoomScale;
 			targetFocus = regionFocus;
