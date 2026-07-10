@@ -179,4 +179,70 @@ describe("computeCursorFollowFocus", () => {
 		expect(shiftedFocus.cx).toBeCloseTo(0.5, 6);
 		expect(shiftedFocus.cy).toBeCloseTo(0.49, 6);
 	});
+
+	it("clamps cropped follow focus at the crop boundary", () => {
+		const state = createCursorFollowCameraState();
+		const cursorSamples = [
+			{ timeMs: 0, cx: 0.5, cy: 0.5, interactionType: "move" as const },
+			{ timeMs: 100, cx: 0.5, cy: 0.63, interactionType: "move" as const },
+		];
+		const cropRegion = { x: 0, y: 0.2, width: 1, height: 0.4 };
+
+		computeCursorFollowFocus(
+			state,
+			cursorSamples,
+			0,
+			2,
+			1,
+			{ cx: 0.5, cy: 0.5 },
+			undefined,
+			cropRegion,
+		);
+		const shiftedFocus = computeCursorFollowFocus(
+			state,
+			cursorSamples,
+			100,
+			2,
+			1,
+			{ cx: 0.5, cy: 0.5 },
+			undefined,
+			cropRegion,
+		);
+
+		expect(shiftedFocus.cx).toBeCloseTo(0.5, 6);
+		expect(shiftedFocus.cy).toBeCloseTo(0.5, 6);
+	});
+
+	it("uses crop height for the vertical safe-zone offset", () => {
+		const state = createCursorFollowCameraState();
+		const cursorSamples = [
+			{ timeMs: 0, cx: 0.5, cy: 0.5, interactionType: "move" as const },
+			{ timeMs: 100, cx: 0.5, cy: 0.63, interactionType: "move" as const },
+		];
+		const cropRegion = { x: 0, y: 0.25, width: 1, height: 0.4 };
+
+		computeCursorFollowFocus(
+			state,
+			cursorSamples,
+			0,
+			2,
+			1,
+			{ cx: 0.5, cy: 0.5 },
+			undefined,
+			cropRegion,
+		);
+		const shiftedFocus = computeCursorFollowFocus(
+			state,
+			cursorSamples,
+			100,
+			2,
+			1,
+			{ cx: 0.5, cy: 0.5 },
+			undefined,
+			cropRegion,
+		);
+
+		expect(shiftedFocus.cx).toBeCloseTo(0.5, 6);
+		expect(shiftedFocus.cy).toBeCloseTo(0.55, 6);
+	});
 });

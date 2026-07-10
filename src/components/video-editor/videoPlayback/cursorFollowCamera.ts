@@ -82,8 +82,13 @@ function clampSafeZoneRatio(ratio: number) {
 	return Math.max(0, Math.min(0.49, ratio));
 }
 
-function getVisibleHalfSpan(zoomScale: number) {
-	return 1 / (2 * Math.max(1, zoomScale));
+function getVisibleSpans(zoomScale: number, cropRegion?: CropRegion) {
+	const scale = Math.max(1, zoomScale);
+
+	return {
+		x: (cropRegion?.width ?? 1) / scale,
+		y: (cropRegion?.height ?? 1) / scale,
+	};
 }
 
 function recenterFocusWhenCursorLeavesSafeZone(
@@ -94,15 +99,16 @@ function recenterFocusWhenCursorLeavesSafeZone(
 	verticalSafeZoneRatio: number,
 	cropRegion?: CropRegion,
 ): ZoomFocus {
-	const halfSpan = getVisibleHalfSpan(zoomScale);
-	const visibleSpan = halfSpan * 2;
-	const safeZoneInsetX = visibleSpan * clampSafeZoneRatio(horizontalSafeZoneRatio);
-	const safeZoneInsetY = visibleSpan * clampSafeZoneRatio(verticalSafeZoneRatio);
+	const visibleSpan = getVisibleSpans(zoomScale, cropRegion);
+	const halfSpanX = visibleSpan.x / 2;
+	const halfSpanY = visibleSpan.y / 2;
+	const safeZoneInsetX = visibleSpan.x * clampSafeZoneRatio(horizontalSafeZoneRatio);
+	const safeZoneInsetY = visibleSpan.y * clampSafeZoneRatio(verticalSafeZoneRatio);
 
-	const safeLeft = currentFocus.cx - halfSpan + safeZoneInsetX;
-	const safeRight = currentFocus.cx + halfSpan - safeZoneInsetX;
-	const safeTop = currentFocus.cy - halfSpan + safeZoneInsetY;
-	const safeBottom = currentFocus.cy + halfSpan - safeZoneInsetY;
+	const safeLeft = currentFocus.cx - halfSpanX + safeZoneInsetX;
+	const safeRight = currentFocus.cx + halfSpanX - safeZoneInsetX;
+	const safeTop = currentFocus.cy - halfSpanY + safeZoneInsetY;
+	const safeBottom = currentFocus.cy + halfSpanY - safeZoneInsetY;
 
 	let nextFocusX = currentFocus.cx;
 	let nextFocusY = currentFocus.cy;
@@ -114,9 +120,9 @@ function recenterFocusWhenCursorLeavesSafeZone(
 	}
 
 	if (cursorFocus.cy < safeTop) {
-		nextFocusY = cursorFocus.cy + halfSpan - safeZoneInsetY;
+		nextFocusY = cursorFocus.cy + halfSpanY - safeZoneInsetY;
 	} else if (cursorFocus.cy > safeBottom) {
-		nextFocusY = cursorFocus.cy - halfSpan + safeZoneInsetY;
+		nextFocusY = cursorFocus.cy - halfSpanY + safeZoneInsetY;
 	}
 
 	return clampFocusToScale(
