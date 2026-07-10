@@ -2522,6 +2522,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 								prevFocus: cropPanFocusRef.current,
 								strength,
 								zoomScale,
+								margins: region.followMargins,
 							});
 							if (step) {
 								cropPanOffsetRef.current = step.offset;

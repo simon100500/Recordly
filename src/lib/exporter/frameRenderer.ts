@@ -2055,6 +2055,7 @@ export class FrameRenderer {
 						prevFocus: this.cropFollowFocus,
 						strength,
 						zoomScale,
+						margins: region.followMargins,
 					});
 					if (step) {
 						this.cropFollowOffset = step.offset;

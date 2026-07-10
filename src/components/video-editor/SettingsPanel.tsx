@@ -73,7 +73,9 @@ import type {
 	ZoomMode,
 	ZoomMotionBlurTuning,
 	ZoomTransitionEasing,
+	FollowMargins,
 } from "./types";
+import { DEFAULT_FOLLOW_MARGINS, MAX_FOLLOW_MARGIN } from "./types";
 import {
 	ADVANCED_VERTICAL_PADDING_MAX,
 	DEFAULT_AUTO_CAPTION_SETTINGS,
@@ -707,6 +709,8 @@ interface SettingsPanelProps {
 	selectedZoomId?: string | null;
 	selectedZoomMode?: ZoomMode | null;
 	onZoomModeChange?: (mode: ZoomMode) => void;
+	selectedZoomFollowMargins?: FollowMargins | null;
+	onZoomFollowMarginsChange?: (margins: FollowMargins) => void;
 	onZoomDelete?: (id: string) => void;
 	selectedClipId?: string | null;
 	selectedClipSpeed?: number | null;
@@ -1172,6 +1176,8 @@ export function SettingsPanel({
 	selectedZoomId,
 	selectedZoomMode,
 	onZoomModeChange,
+	selectedZoomFollowMargins,
+	onZoomFollowMarginsChange,
 	onZoomDelete,
 	selectedClipId,
 	selectedClipSpeed,
@@ -3447,6 +3453,41 @@ export function SettingsPanel({
 								);
 							})}
 						</div>
+						{selectedZoomMode === "follow" && onZoomFollowMarginsChange && (
+								<div className="flex flex-col gap-1.5 mt-1">
+									{(
+										[
+											{ key: "top", label: "Top gap" },
+											{ key: "bottom", label: "Bottom gap" },
+											{ key: "left", label: "Left gap" },
+											{ key: "right", label: "Right gap" },
+										] as const
+									).map(({ key, label }) => {
+										const margins = selectedZoomFollowMargins ?? DEFAULT_FOLLOW_MARGINS;
+										return (
+										<SliderControl
+											key={key}
+											label={tSettings(`zoom.followGap.${key}`, label)}
+											value={Math.round((margins[key] ?? 0) * 100)}
+											defaultValue={0}
+											min={0}
+											max={Math.round(MAX_FOLLOW_MARGIN * 100)}
+											step={1}
+											onChange={(v) =>
+												onZoomFollowMarginsChange({
+													...margins,
+													[key]: v / 100,
+												})
+											}
+											formatValue={(v) => `${v}%`}
+											parseInput={(text) =>
+												parseFloat(text.replace(/%$/, "")) || 0
+											}
+										/>
+										);
+									})}
+								</div>
+							)}
 						<div className="h-px bg-foreground/[0.06] my-1" />
 					</>
 				)}

@@ -1,4 +1,5 @@
-import type { CropRegion, ZoomFocus } from "../types";
+import type { CropRegion, FollowMargins, ZoomFocus } from "../types";
+import { DEFAULT_FOLLOW_MARGINS } from "../types";
 
 export interface CropPanOffset {
 	x: number;
@@ -33,29 +34,40 @@ function getVisibleHalfSpan(zoomScale: number) {
  * When the cursor exits, the focus shifts just enough to bring it back
  * to the safe-zone boundary — so the cursor can reach the edge of the
  * visible area without the canvas dragging it to centre.
+ *
+ * ``minMargin`` / ``maxMargin`` let the visible range extend beyond the
+ * source bounds, creating empty edge gaps (e.g. for subtitles).
  */
 function computeAxisFocus(
 	prevFocus: number,
 	cursorFocus: number,
 	hasRoom: boolean,
 	zoomScale: number,
+	minMarginRatio: number,
+	maxMarginRatio: number,
 ): number {
 	if (hasRoom) return 0.5;
 
 	const halfSpan = getVisibleHalfSpan(zoomScale);
 	if (halfSpan >= 0.5) return 0.5;
 
+	const visibleSpan = halfSpan * 2;
+	const minGap = minMarginRatio * visibleSpan;
+	const maxGap = maxMarginRatio * visibleSpan;
+	const focusMin = halfSpan - minGap;
+	const focusMax = 1 - halfSpan + maxGap;
+
 	const safeMargin = halfSpan * (1 - 2 * FOCUS_SAFE_ZONE_RATIO);
 	const safeMin = prevFocus - safeMargin;
 	const safeMax = prevFocus + safeMargin;
 
 	if (cursorFocus < safeMin) {
-		return Math.max(halfSpan, cursorFocus + safeMargin);
+		return Math.max(focusMin, cursorFocus + safeMargin);
 	}
 	if (cursorFocus > safeMax) {
-		return Math.min(1 - halfSpan, cursorFocus - safeMargin);
+		return Math.min(focusMax, cursorFocus - safeMargin);
 	}
-	return Math.max(halfSpan, Math.min(prevFocus, 1 - halfSpan));
+	return Math.max(focusMin, Math.min(prevFocus, focusMax));
 }
 
 /**
@@ -65,6 +77,10 @@ function computeAxisFocus(
  * On axes where the crop has no pan room, a lazy-camera safe zone lets the
  * cursor roam freely in the centre and only shifts the zoom focus once it
  * approaches the visible edge.
+ *
+ * ``margins`` controls per-edge gap: when the cursor pushes the focus to a
+ * clamp limit, the visible range extends beyond the source bounds, creating
+ * empty space (e.g. for subtitles).
  */
 export function stepCropPanFollow(params: {
 	cursor: ZoomFocus;
@@ -78,6 +94,8 @@ export function stepCropPanFollow(params: {
 	/** Vertical edge safe-zone margin; defaults to 10%. */
 	verticalDeadZone?: number;
 	smoothFactor?: number;
+	/** Per-edge gap ratios (0–0.15). 0 = no gap. */
+	margins?: FollowMargins;
 }): CropPanStep | null {
 	const {
 		cursor,
@@ -89,6 +107,7 @@ export function stepCropPanFollow(params: {
 		deadZone: horizontalDeadZone = 0.25,
 		verticalDeadZone = 0.1,
 		smoothFactor = 0.12,
+		margins = DEFAULT_FOLLOW_MARGINS,
 	} = params;
 
 	if (crop.width <= 0 || crop.height <= 0) return null;
@@ -127,12 +146,16 @@ export function stepCropPanFollow(params: {
 		(cursor.cx - crop.x) / crop.width,
 		hasRoomX,
 		zoomScale,
+		margins.left,
+		margins.right,
 	);
 	const focusY = computeAxisFocus(
 		prevFocus.cy,
 		(cursor.cy - crop.y) / crop.height,
 		hasRoomY,
 		zoomScale,
+		margins.top,
+		margins.bottom,
 	);
 
 	return {

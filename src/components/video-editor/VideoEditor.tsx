@@ -223,6 +223,7 @@ import {
 	type WebcamOverlaySettings,
 	type ZoomDepth,
 	type ZoomFocus,
+	type FollowMargins,
 	type ZoomMode,
 	type ZoomMotionBlurTuning,
 	type ZoomRegion,
@@ -4084,6 +4085,18 @@ export default function VideoEditor() {
 		[selectedZoomId],
 	);
 
+	const handleZoomFollowMarginsChange = useCallback(
+		(margins: FollowMargins) => {
+			if (!selectedZoomId) return;
+			setZoomRegions((prev) =>
+				prev.map((region) =>
+					region.id === selectedZoomId ? { ...region, followMargins: margins } : region,
+				),
+			);
+		},
+		[selectedZoomId],
+	);
+
 	const handleZoomDelete = useCallback(
 		(id: string) => {
 			setZoomRegions((prev) => prev.filter((region) => region.id !== id));
@@ -6531,9 +6544,18 @@ export default function VideoEditor() {
 											"auto")
 										: null
 								}
-								onZoomModeChange={(mode) =>
-									selectedZoomId && handleZoomModeChange(mode)
-								}
+							onZoomModeChange={(mode) =>
+								selectedZoomId && handleZoomModeChange(mode)
+							}
+							selectedZoomFollowMargins={
+								selectedZoomId
+									? (zoomRegions.find((z) => z.id === selectedZoomId)
+											?.followMargins ?? null)
+									: null
+							}
+							onZoomFollowMarginsChange={(margins) =>
+								selectedZoomId && handleZoomFollowMarginsChange(margins)
+							}
 								onZoomDelete={handleZoomDelete}
 								selectedClipId={selectedClipId}
 								selectedClipSpeed={

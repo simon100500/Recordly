@@ -78,6 +78,9 @@ import {
 	type ZoomMotionBlurTuning,
 	type ZoomRegion,
 	type ZoomTransitionEasing,
+	DEFAULT_FOLLOW_MARGINS,
+	type FollowMargins,
+	MAX_FOLLOW_MARGIN,
 } from "./types";
 import { normalizeWebcamCropRegion } from "./webcamOverlay";
 
@@ -168,6 +171,24 @@ function isFiniteNumber(value: unknown): value is number {
 
 function clamp(value: number, min: number, max: number) {
 	return Math.min(max, Math.max(min, value));
+}
+
+function normalizeFollowMargins(raw: unknown): FollowMargins | undefined {
+	if (!raw || typeof raw !== "object") return undefined;
+	const r = raw as Partial<Record<keyof FollowMargins, unknown>>;
+	const top = isFiniteNumber(r.top) ? clamp(r.top, 0, MAX_FOLLOW_MARGIN) : undefined;
+	const bottom = isFiniteNumber(r.bottom) ? clamp(r.bottom, 0, MAX_FOLLOW_MARGIN) : undefined;
+	const left = isFiniteNumber(r.left) ? clamp(r.left, 0, MAX_FOLLOW_MARGIN) : undefined;
+	const right = isFiniteNumber(r.right) ? clamp(r.right, 0, MAX_FOLLOW_MARGIN) : undefined;
+	if (top === undefined && bottom === undefined && left === undefined && right === undefined) {
+		return undefined;
+	}
+	return {
+		top: top ?? DEFAULT_FOLLOW_MARGINS.top,
+		bottom: bottom ?? DEFAULT_FOLLOW_MARGINS.bottom,
+		left: left ?? DEFAULT_FOLLOW_MARGINS.left,
+		right: right ?? DEFAULT_FOLLOW_MARGINS.right,
+	};
 }
 
 type PersistedDevMotionBlurSettings = {
@@ -475,10 +496,13 @@ export function normalizeProjectEditor(editor: Partial<ProjectEditorState>): Pro
 								1,
 							),
 						},
-						mode:
-							region.mode === "auto" || region.mode === "manual"
-								? region.mode
-								: undefined,
+					mode:
+						region.mode === "auto" ||
+						region.mode === "manual" ||
+						region.mode === "follow"
+							? region.mode
+							: undefined,
+					followMargins: normalizeFollowMargins(region.followMargins),
 					};
 				})
 		: [];

@@ -158,4 +158,56 @@ describe("stepCropPanFollow", () => {
 
 		expect(step2.focus.cy).toBe(step1.focus.cy);
 	});
+
+	it("extends the focus beyond source bounds when a bottom margin is set", () => {
+		const horizontalCrop = { x: 0.15, y: 0, width: 0.7, height: 1 };
+
+		// zoomScale 1.5 → halfSpan ≈ 0.333, visibleSpan ≈ 0.667
+		// bottom margin 10% → gap = 0.067, maxFocus = 1 - 0.333 + 0.067 = 0.733
+		const noMargin = stepCropPanFollow({
+			cursor: { cx: 0.5, cy: 0.95 },
+			crop: horizontalCrop,
+			prevOffset: DEFAULT_CROP_PAN_OFFSET,
+			prevFocus: { cx: 0.5, cy: 0.5 },
+			strength: 1,
+			zoomScale: 1.5,
+			smoothFactor: 1,
+		})!;
+
+		const withMargin = stepCropPanFollow({
+			cursor: { cx: 0.5, cy: 0.95 },
+			crop: horizontalCrop,
+			prevOffset: DEFAULT_CROP_PAN_OFFSET,
+			prevFocus: { cx: 0.5, cy: 0.5 },
+			strength: 1,
+			zoomScale: 1.5,
+			smoothFactor: 1,
+			margins: { top: 0, bottom: 0.1, left: 0, right: 0 },
+		})!;
+
+		// Without margin, focus clamped to 1 - halfSpan = 0.667
+		expect(noMargin.focus.cy).toBeCloseTo(0.667, 2);
+		// With margin, focus extends beyond normal clamp
+		expect(withMargin.focus.cy).toBeGreaterThan(noMargin.focus.cy);
+		expect(withMargin.focus.cy).toBeCloseTo(0.733, 2);
+	});
+
+	it("extends the focus on the left when a left margin is set", () => {
+		const verticalCrop = { x: 0, y: 0.15, width: 1, height: 0.7 };
+
+		const withMargin = stepCropPanFollow({
+			cursor: { cx: 0.05, cy: 0.5 },
+			crop: verticalCrop,
+			prevOffset: DEFAULT_CROP_PAN_OFFSET,
+			prevFocus: { cx: 0.5, cy: 0.5 },
+			strength: 1,
+			zoomScale: 1.5,
+			smoothFactor: 1,
+			margins: { top: 0, bottom: 0, left: 0.1, right: 0 },
+		})!;
+
+		// Focus should go below normal min (halfSpan ≈ 0.333)
+		expect(withMargin.focus.cx).toBeLessThan(0.333);
+		expect(withMargin.focus.cx).toBeCloseTo(0.267, 2);
+	});
 });

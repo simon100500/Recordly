@@ -7,6 +7,22 @@ export interface ZoomFocus {
 
 export type ZoomMode = "auto" | "manual" | "follow";
 
+export interface FollowMargins {
+	top: number;
+	bottom: number;
+	left: number;
+	right: number;
+}
+
+export const DEFAULT_FOLLOW_MARGINS: FollowMargins = {
+	top: 0,
+	bottom: 0,
+	left: 0,
+	right: 0,
+};
+
+export const MAX_FOLLOW_MARGIN = 0.15;
+
 export interface ZoomRegion {
 	id: string;
 	startMs: number;
@@ -14,6 +30,7 @@ export interface ZoomRegion {
 	depth: ZoomDepth;
 	focus: ZoomFocus;
 	mode?: ZoomMode;
+	followMargins?: FollowMargins;
 }
 
 export interface CursorTelemetryPoint {
