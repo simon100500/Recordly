@@ -3,8 +3,6 @@ import type { CropRegion, ZoomFocus } from "../types";
 export interface CropPanOffset {
 	x: number;
 	y: number;
-	/** Full-height canvas anchor used to keep the cursor near a vertical edge. */
-	verticalAnchor?: "top" | "bottom";
 }
 
 export interface CropPanStep {
@@ -26,9 +24,8 @@ export interface CropPanStep {
  * Crop-panning "follow" camera.
  *
  * Pans the visible crop window so the cursor stays inside an edge safe zone.
- * On axes where the crop has no room to pan (full-frame), the camera itself
- * follows the cursor instead — so following works on both axes regardless of
- * the crop dimensions.
+ * A full-height crop can translate the canvas vertically at the safe-zone
+ * edges without moving the source crop outside its bounds.
  */
 export function stepCropPanFollow(params: {
 	cursor: ZoomFocus;
@@ -68,18 +65,7 @@ export function stepCropPanFollow(params: {
 	} else if (relX > 1 - horizontalDeadZone) {
 		targetOffsetX += (relX - (1 - horizontalDeadZone)) * crop.width;
 	}
-	let verticalAnchor = prevOffset.verticalAnchor;
-	if (isFullHeightCanvas) {
-		if (!verticalAnchor) {
-			verticalAnchor = cursor.cy >= 0.5 ? "bottom" : "top";
-		} else if (verticalAnchor === "bottom" && cursor.cy <= verticalDeadZone) {
-			verticalAnchor = "top";
-		} else if (verticalAnchor === "top" && cursor.cy >= 1 - verticalDeadZone) {
-			verticalAnchor = "bottom";
-		}
-		targetOffsetY =
-			cursor.cy - (verticalAnchor === "bottom" ? 1 - verticalDeadZone : verticalDeadZone);
-	} else if (relY < verticalDeadZone) {
+	if (relY < verticalDeadZone) {
 		targetOffsetY -= (verticalDeadZone - relY) * crop.height;
 	} else if (relY > 1 - verticalDeadZone) {
 		targetOffsetY += (relY - (1 - verticalDeadZone)) * crop.height;
@@ -103,11 +89,7 @@ export function stepCropPanFollow(params: {
 	const focusY = hasRoomY ? 0.5 : (cursor.cy - crop.y) / crop.height;
 
 	return {
-		offset: {
-			x: offsetX,
-			y: offsetY,
-			...(isFullHeightCanvas ? { verticalAnchor } : {}),
-		},
+		offset: { x: offsetX, y: offsetY },
 		fade: { x: fadeX, y: fadeY },
 		sourceCropFade: { x: sourceCropFadeX, y: sourceCropFadeY },
 		cursorViewportOffset: { x: 0, y: cursorViewportOffsetY },

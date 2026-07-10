@@ -44,82 +44,40 @@ describe("stepCropPanFollow", () => {
 		);
 	});
 
-	it("translates a full-height canvas to anchor the initial cursor at the bottom edge", () => {
-		const cursor = { cx: 0.5, cy: 0.5 };
+	it("keeps a full-height canvas stationary while the cursor is inside the safe zone", () => {
 		const result = stepCropPanFollow({
-			cursor,
+			cursor: { cx: 0.5, cy: 0.5 },
 			crop: { x: 0, y: 0, width: 1, height: 1 },
 			prevOffset: DEFAULT_CROP_PAN_OFFSET,
 			strength: 1,
 			smoothFactor: 1,
 		});
 
-		expect(result).not.toBeNull();
-		expect(result!.offset.y).toBe(-0.4);
-		expect(result!.fade.y).toBe(-0.4);
+		expect(result!.offset.y).toBe(0);
+		expect(result!.fade.y).toBe(0);
 		expect(result!.effectiveCrop.y).toBe(0);
-		expect(result!.cursorViewportOffset.y).toBe(-0.4);
-		expect(
-			(cursor.cy - result!.effectiveCrop.y - result!.cursorViewportOffset.y) /
-				result!.effectiveCrop.height,
-		).toBeCloseTo(0.9, 6);
-
-		let jitterResult = result!;
-		for (const cy of [0.49, 0.51, 0.48, 0.52]) {
-			jitterResult = stepCropPanFollow({
-				cursor: { cx: 0.5, cy },
-				crop: { x: 0, y: 0, width: 1, height: 1 },
-				prevOffset: jitterResult.offset,
-				strength: 1,
-				smoothFactor: 1,
-			})!;
-
-			expect(jitterResult.offset.verticalAnchor).toBe("bottom");
-			expect(
-				(cy - jitterResult.effectiveCrop.y - jitterResult.cursorViewportOffset.y) /
-					jitterResult.effectiveCrop.height,
-			).toBeCloseTo(0.9, 6);
-		}
-
-		const oppositeBoundaryResult = stepCropPanFollow({
-			cursor: { cx: 0.5, cy: 0.1 },
-			crop: { x: 0, y: 0, width: 1, height: 1 },
-			prevOffset: jitterResult.offset,
-			strength: 1,
-			smoothFactor: 1,
-		});
-
-		expect(oppositeBoundaryResult!.offset.verticalAnchor).toBe("top");
+		expect(result!.cursorViewportOffset.y).toBe(0);
 	});
 
-	it("translates a full-height canvas to anchor the initial cursor at the top edge", () => {
-		const cursor = { cx: 0.5, cy: 0.49 };
-		const result = stepCropPanFollow({
-			cursor,
-			crop: { x: 0, y: 0, width: 1, height: 1 },
-			prevOffset: DEFAULT_CROP_PAN_OFFSET,
-			strength: 1,
-			smoothFactor: 1,
-		});
+	it("pans a full-height canvas only at the vertical safe-zone edges", () => {
+		for (const [cy, expectedFade, expectedRelativeY] of [
+			[0.95, 0.05, 0.9],
+			[0.05, -0.05, 0.1],
+		] as const) {
+			const result = stepCropPanFollow({
+				cursor: { cx: 0.5, cy },
+				crop: { x: 0, y: 0, width: 1, height: 1 },
+				prevOffset: DEFAULT_CROP_PAN_OFFSET,
+				strength: 1,
+				smoothFactor: 1,
+			});
 
-		expect(result).not.toBeNull();
-		expect(result!.offset.y).toBe(0.39);
-		expect(result!.fade.y).toBe(0.39);
-		expect(result!.effectiveCrop.y).toBe(0);
-		expect(result!.cursorViewportOffset.y).toBe(0.39);
-		expect(
-			(cursor.cy - result!.effectiveCrop.y - result!.cursorViewportOffset.y) /
-				result!.effectiveCrop.height,
-		).toBeCloseTo(0.1, 6);
-
-		const downwardResult = stepCropPanFollow({
-			cursor: { cx: 0.5, cy: 0.9 },
-			crop: { x: 0, y: 0, width: 1, height: 1 },
-			prevOffset: result!.offset,
-			strength: 1,
-			smoothFactor: 1,
-		});
-
-		expect(downwardResult!.offset.verticalAnchor).toBe("bottom");
+			expect(result!.fade.y).toBeCloseTo(expectedFade, 6);
+			expect(result!.effectiveCrop.y).toBe(0);
+			expect(
+				(cy - result!.effectiveCrop.y - result!.cursorViewportOffset.y) /
+					result!.effectiveCrop.height,
+			).toBeCloseTo(expectedRelativeY, 6);
+		}
 	});
 });
