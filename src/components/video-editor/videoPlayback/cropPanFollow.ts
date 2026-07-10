@@ -22,6 +22,12 @@ export interface CropPanStep {
 }
 
 const FOCUS_SAFE_ZONE_RATIO = 0.25;
+/**
+ * Keeps the cursor point this far inside the visible zoom band on panned
+ * axes so the cursor sprite (and spring lag) never clips off-screen.
+ * ~2.5 % of the mask dimension ≈ 48 px at 1920 px.
+ */
+const CURSOR_EDGE_BUFFER = 0.025;
 
 function getVisibleHalfSpan(zoomScale: number) {
 	return 1 / (2 * Math.max(1, zoomScale));
@@ -59,13 +65,15 @@ function computeAxisFocus(
 	const focusHi = 1 - halfSpan + maxGap;
 
 	if (hasRoom) {
-		const visLo = 0.5 - halfSpan;
-		const visHi = 0.5 + halfSpan;
+		// Trigger slightly before the cursor reaches the visible edge
+		// and place it CURSOR_EDGE_BUFFER inside the band.
+		const visLo = 0.5 - halfSpan + CURSOR_EDGE_BUFFER;
+		const visHi = 0.5 + halfSpan - CURSOR_EDGE_BUFFER;
 		if (cursorEff < visLo) {
-			return Math.max(focusLo, cursorEff + halfSpan);
+			return Math.max(focusLo, cursorEff + halfSpan - CURSOR_EDGE_BUFFER);
 		}
 		if (cursorEff > visHi) {
-			return Math.min(focusHi, cursorEff - halfSpan);
+			return Math.min(focusHi, cursorEff - halfSpan + CURSOR_EDGE_BUFFER);
 		}
 		return 0.5;
 	}
