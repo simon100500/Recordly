@@ -59,25 +59,37 @@ describe("stepCropPanFollow", () => {
 		expect(result!.cursorViewportOffset.y).toBe(0);
 	});
 
-	it("pans a full-height canvas only at the vertical safe-zone edges", () => {
-		for (const [cy, expectedFade, expectedRelativeY] of [
-			[0.95, 0.05, 0.9],
-			[0.05, -0.05, 0.1],
-		] as const) {
+	it("does not pan or zoom-follow vertically on a horizontal crop (full height)", () => {
+		const horizontalCrop = { x: 0.15, y: 0, width: 0.7, height: 1 };
+
+		for (const cy of [0.95, 0.05, 0.5]) {
 			const result = stepCropPanFollow({
 				cursor: { cx: 0.5, cy },
-				crop: { x: 0, y: 0, width: 1, height: 1 },
+				crop: horizontalCrop,
 				prevOffset: DEFAULT_CROP_PAN_OFFSET,
 				strength: 1,
 				smoothFactor: 1,
 			});
 
-			expect(result!.fade.y).toBeCloseTo(expectedFade, 6);
+			expect(result).not.toBeNull();
+			expect(result!.fade.y).toBe(0);
+			expect(result!.cursorViewportOffset.y).toBe(0);
 			expect(result!.effectiveCrop.y).toBe(0);
-			expect(
-				(cy - result!.effectiveCrop.y - result!.cursorViewportOffset.y) /
-					result!.effectiveCrop.height,
-			).toBeCloseTo(expectedRelativeY, 6);
+			expect(result!.focus.cy).toBe(0.5);
 		}
+	});
+
+	it("still zoom-follows vertically on full-frame (no crop)", () => {
+		const result = stepCropPanFollow({
+			cursor: { cx: 0.5, cy: 0.9 },
+			crop: { x: 0, y: 0, width: 1, height: 1 },
+			prevOffset: DEFAULT_CROP_PAN_OFFSET,
+			strength: 1,
+			smoothFactor: 1,
+		});
+
+		expect(result).not.toBeNull();
+		expect(result!.fade.y).toBe(0);
+		expect(result!.focus.cy).toBeCloseTo(0.9, 6);
 	});
 });

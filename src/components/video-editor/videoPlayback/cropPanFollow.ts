@@ -14,7 +14,7 @@ export interface CropPanStep {
 	sourceCropFade: CropPanOffset;
 	/** Canvas-only translation used when projecting cursor and overlay coordinates. */
 	cursorViewportOffset: CropPanOffset;
-	/** Camera focus (mask-relative). 0.5 on panned axes, cursor on full-frame axes */
+	/** Camera focus (mask-relative). 0.5 when any crop is active, cursor only on full-frame */
 	focus: ZoomFocus;
 	/** Effective crop region (base crop + fade) — use as the overlay viewport sourceCrop */
 	effectiveCrop: CropRegion;
@@ -24,8 +24,10 @@ export interface CropPanStep {
  * Crop-panning "follow" camera.
  *
  * Pans the visible crop window so the cursor stays inside an edge safe zone.
- * A full-height crop can translate the canvas vertically at the safe-zone
- * edges without moving the source crop outside its bounds.
+ * On axes where the crop has no pan room, the cursor simply moves freely to
+ * the screen edge — the zoom stays centered instead of dragging the canvas.
+ * Only when there's no crop at all (full frame) does the zoom follow the
+ * cursor directly.
  */
 export function stepCropPanFollow(params: {
 	cursor: ZoomFocus;
@@ -56,7 +58,6 @@ export function stepCropPanFollow(params: {
 	const relY = (cursor.cy - effY) / crop.height;
 	const hasRoomX = crop.x > 0 || crop.x + crop.width < 1;
 	const hasRoomY = crop.y > 0 || crop.y + crop.height < 1;
-	const isFullHeightCanvas = crop.y === 0 && crop.height === 1;
 
 	let targetOffsetX = prevOffset.x;
 	let targetOffsetY = prevOffset.y;
@@ -72,31 +73,27 @@ export function stepCropPanFollow(params: {
 	}
 
 	targetOffsetX = Math.max(-crop.x, Math.min(targetOffsetX, 1 - crop.x - crop.width));
-	if (!isFullHeightCanvas) {
-		targetOffsetY = Math.max(-crop.y, Math.min(targetOffsetY, 1 - crop.y - crop.height));
-	}
+	targetOffsetY = Math.max(-crop.y, Math.min(targetOffsetY, 1 - crop.y - crop.height));
 
 	const offsetX = prevOffset.x + (targetOffsetX - prevOffset.x) * smoothFactor;
 	const offsetY = prevOffset.y + (targetOffsetY - prevOffset.y) * smoothFactor;
 
 	const fadeX = hasRoomX ? offsetX * strength : 0;
-	const fadeY = hasRoomY || isFullHeightCanvas ? offsetY * strength : 0;
-	const sourceCropFadeX = hasRoomX ? fadeX : 0;
-	const sourceCropFadeY = hasRoomY ? fadeY : 0;
-	const cursorViewportOffsetY = isFullHeightCanvas ? fadeY : 0;
+	const fadeY = hasRoomY ? offsetY * strength : 0;
 
-	const focusX = hasRoomX ? 0.5 : (cursor.cx - crop.x) / crop.width;
-	const focusY = hasRoomY ? 0.5 : (cursor.cy - crop.y) / crop.height;
+	const isFullFrame = !hasRoomX && !hasRoomY;
+	const focusX = isFullFrame ? (cursor.cx - crop.x) / crop.width : 0.5;
+	const focusY = isFullFrame ? (cursor.cy - crop.y) / crop.height : 0.5;
 
 	return {
 		offset: { x: offsetX, y: offsetY },
 		fade: { x: fadeX, y: fadeY },
-		sourceCropFade: { x: sourceCropFadeX, y: sourceCropFadeY },
-		cursorViewportOffset: { x: 0, y: cursorViewportOffsetY },
+		sourceCropFade: { x: fadeX, y: fadeY },
+		cursorViewportOffset: { x: 0, y: 0 },
 		focus: { cx: focusX, cy: focusY },
 		effectiveCrop: {
-			x: crop.x + sourceCropFadeX,
-			y: crop.y + sourceCropFadeY,
+			x: crop.x + fadeX,
+			y: crop.y + fadeY,
 			width: crop.width,
 			height: crop.height,
 		},
