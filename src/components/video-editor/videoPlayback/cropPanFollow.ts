@@ -19,7 +19,7 @@ export interface CropPanStep {
 /**
  * Crop-panning "follow" camera.
  *
- * Pans the visible crop window so the cursor stays inside a central dead zone.
+ * Pans the visible crop window so the cursor stays inside an edge safe zone.
  * On axes where the crop has no room to pan (full-frame), the camera itself
  * follows the cursor instead — so following works on both axes regardless of
  * the crop dimensions.
@@ -29,10 +29,21 @@ export function stepCropPanFollow(params: {
 	crop: CropRegion;
 	prevOffset: CropPanOffset;
 	strength: number;
+	/** Horizontal edge safe-zone margin; defaults to 25%. */
 	deadZone?: number;
+	/** Vertical edge safe-zone margin; defaults to 10%. */
+	verticalDeadZone?: number;
 	smoothFactor?: number;
 }): CropPanStep | null {
-	const { cursor, crop, prevOffset, strength, deadZone = 0.25, smoothFactor = 0.12 } = params;
+	const {
+		cursor,
+		crop,
+		prevOffset,
+		strength,
+		deadZone: horizontalDeadZone = 0.25,
+		verticalDeadZone = 0.1,
+		smoothFactor = 0.12,
+	} = params;
 
 	if (crop.width <= 0 || crop.height <= 0) return null;
 
@@ -43,15 +54,15 @@ export function stepCropPanFollow(params: {
 
 	let targetOffsetX = prevOffset.x;
 	let targetOffsetY = prevOffset.y;
-	if (relX < deadZone) {
-		targetOffsetX -= (deadZone - relX) * crop.width;
-	} else if (relX > 1 - deadZone) {
-		targetOffsetX += (relX - (1 - deadZone)) * crop.width;
+	if (relX < horizontalDeadZone) {
+		targetOffsetX -= (horizontalDeadZone - relX) * crop.width;
+	} else if (relX > 1 - horizontalDeadZone) {
+		targetOffsetX += (relX - (1 - horizontalDeadZone)) * crop.width;
 	}
-	if (relY < deadZone) {
-		targetOffsetY -= (deadZone - relY) * crop.height;
-	} else if (relY > 1 - deadZone) {
-		targetOffsetY += (relY - (1 - deadZone)) * crop.height;
+	if (relY < verticalDeadZone) {
+		targetOffsetY -= (verticalDeadZone - relY) * crop.height;
+	} else if (relY > 1 - verticalDeadZone) {
+		targetOffsetY += (relY - (1 - verticalDeadZone)) * crop.height;
 	}
 
 	targetOffsetX = Math.max(-crop.x, Math.min(targetOffsetX, 1 - crop.x - crop.width));
