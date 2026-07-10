@@ -1988,8 +1988,17 @@ export class FrameRenderer {
 		if (!crop) return;
 		const fade = this.cropFollowFade;
 		const sourceCropFade = this.cropFollowSourceCropFade;
+		const baseCrop = this.config.cropRegion ?? { x: 0, y: 0, width: 1, height: 1 };
 		this.layoutCache.maskRect.cursorViewportOffset = this.cropFollowCursorViewportOffset;
-		if (Math.abs(fade.x) <= 0.0001 && Math.abs(fade.y) <= 0.0001) return;
+		if (Math.abs(fade.x) <= 0.0001 && Math.abs(fade.y) <= 0.0001) {
+			this.videoSprite.position.set(
+				this.layoutCache.baseOffset.x,
+				this.layoutCache.baseOffset.y,
+			);
+			crop.x = baseCrop.x;
+			crop.y = baseCrop.y;
+			return;
+		}
 
 		const fullVDW = this.layoutCache.maskRect.width / crop.width;
 		const fullVDH = this.layoutCache.maskRect.height / crop.height;
@@ -1997,8 +2006,8 @@ export class FrameRenderer {
 			this.layoutCache.baseOffset.x - fade.x * fullVDW,
 			this.layoutCache.baseOffset.y - fade.y * fullVDH,
 		);
-		crop.x = (this.config.cropRegion?.x ?? crop.x) + sourceCropFade.x;
-		crop.y = (this.config.cropRegion?.y ?? crop.y) + sourceCropFade.y;
+		crop.x = baseCrop.x + sourceCropFade.x;
+		crop.y = baseCrop.y + sourceCropFade.y;
 	}
 
 	private updateAnimationState(timeMs: number): number {
