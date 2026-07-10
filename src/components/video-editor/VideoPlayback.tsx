@@ -594,7 +594,6 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				width: number;
 				height: number;
 			};
-			cursorViewportOffset?: { x: number; y: number };
 		}>({ x: 0, y: 0, width: 0, height: 0 });
 		const cropBoundsRef = useRef({ startX: 0, endX: 0, startY: 0, endY: 0 });
 		const cropRegionRef = useRef<import("./types").CropRegion | undefined>(cropRegion);
@@ -2534,7 +2533,6 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 									overlayViewport = {
 										...baseMask,
 										sourceCrop: step.effectiveCrop,
-										cursorViewportOffset: step.cursorViewportOffset,
 									};
 									regionFocus = step.focus;
 									cropPanApplied = true;
