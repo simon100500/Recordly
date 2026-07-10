@@ -127,4 +127,56 @@ describe("computeCursorFollowFocus", () => {
 
 		expect(initialFocus).toEqual({ cx: 0.3, cy: 0.7 });
 	});
+
+	it("keeps the cursor 10% from the bottom when it leaves the vertical safe zone", () => {
+		const state = createCursorFollowCameraState();
+		const cursorSamples = [
+			{ timeMs: 0, cx: 0.5, cy: 0.5, interactionType: "move" as const },
+			{ timeMs: 100, cx: 0.5, cy: 0.71, interactionType: "move" as const },
+		];
+		computeCursorFollowFocus(
+			state,
+			cursorSamples,
+			0,
+			2,
+			1,
+			{ cx: 0.5, cy: 0.5 },
+		);
+		const shiftedFocus = computeCursorFollowFocus(
+			state,
+			cursorSamples,
+			100,
+			2,
+			1,
+			{ cx: 0.5, cy: 0.5 },
+		);
+		expect(shiftedFocus.cx).toBeCloseTo(0.5, 6);
+		expect(shiftedFocus.cy).toBeCloseTo(0.51, 6);
+	});
+
+	it("keeps the cursor 10% from the top when it leaves the vertical safe zone", () => {
+		const state = createCursorFollowCameraState();
+		const cursorSamples = [
+			{ timeMs: 0, cx: 0.5, cy: 0.5, interactionType: "move" as const },
+			{ timeMs: 100, cx: 0.5, cy: 0.29, interactionType: "move" as const },
+		];
+		computeCursorFollowFocus(
+			state,
+			cursorSamples,
+			0,
+			2,
+			1,
+			{ cx: 0.5, cy: 0.5 },
+		);
+		const shiftedFocus = computeCursorFollowFocus(
+			state,
+			cursorSamples,
+			100,
+			2,
+			1,
+			{ cx: 0.5, cy: 0.5 },
+		);
+		expect(shiftedFocus.cx).toBeCloseTo(0.5, 6);
+		expect(shiftedFocus.cy).toBeCloseTo(0.49, 6);
+	});
 });
