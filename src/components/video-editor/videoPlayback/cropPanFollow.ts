@@ -3,6 +3,10 @@ import type { CropRegion, ZoomFocus } from "../types";
 export interface CropPanOffset {
 	x: number;
 	y: number;
+	/** Full-height canvas anchor used to keep the cursor near a vertical edge. */
+	verticalAnchor?: "top" | "bottom";
+	/** Previous cursor position used to update the full-height canvas anchor. */
+	lastCursorY?: number;
 }
 
 export interface CropPanStep {
@@ -51,6 +55,9 @@ export function stepCropPanFollow(params: {
 	const effY = crop.y + prevOffset.y;
 	const relX = (cursor.cx - effX) / crop.width;
 	const relY = (cursor.cy - effY) / crop.height;
+	const hasRoomX = crop.x > 0 || crop.x + crop.width < 1;
+	const hasRoomY = crop.y > 0 || crop.y + crop.height < 1;
+	const isFullHeightCanvas = crop.y === 0 && crop.height === 1;
 
 	let targetOffsetX = prevOffset.x;
 	let targetOffsetY = prevOffset.y;
@@ -59,29 +66,43 @@ export function stepCropPanFollow(params: {
 	} else if (relX > 1 - horizontalDeadZone) {
 		targetOffsetX += (relX - (1 - horizontalDeadZone)) * crop.width;
 	}
-	if (relY < verticalDeadZone) {
+	let verticalAnchor = prevOffset.verticalAnchor;
+	if (isFullHeightCanvas) {
+		if (prevOffset.lastCursorY === undefined) {
+			verticalAnchor = cursor.cy >= 0.5 ? "bottom" : "top";
+		} else if (cursor.cy > prevOffset.lastCursorY) {
+			verticalAnchor = "bottom";
+		} else if (cursor.cy < prevOffset.lastCursorY) {
+			verticalAnchor = "top";
+		}
+		targetOffsetY =
+			cursor.cy - (verticalAnchor === "bottom" ? 1 - verticalDeadZone : verticalDeadZone);
+	} else if (relY < verticalDeadZone) {
 		targetOffsetY -= (verticalDeadZone - relY) * crop.height;
 	} else if (relY > 1 - verticalDeadZone) {
 		targetOffsetY += (relY - (1 - verticalDeadZone)) * crop.height;
 	}
 
 	targetOffsetX = Math.max(-crop.x, Math.min(targetOffsetX, 1 - crop.x - crop.width));
-	targetOffsetY = Math.max(-crop.y, Math.min(targetOffsetY, 1 - crop.y - crop.height));
+	if (!isFullHeightCanvas) {
+		targetOffsetY = Math.max(-crop.y, Math.min(targetOffsetY, 1 - crop.y - crop.height));
+	}
 
 	const offsetX = prevOffset.x + (targetOffsetX - prevOffset.x) * smoothFactor;
 	const offsetY = prevOffset.y + (targetOffsetY - prevOffset.y) * smoothFactor;
 
-	const hasRoomX = crop.x > 0 || crop.x + crop.width < 1;
-	const hasRoomY = crop.y > 0 || crop.y + crop.height < 1;
-
 	const fadeX = hasRoomX ? offsetX * strength : 0;
-	const fadeY = hasRoomY ? offsetY * strength : 0;
+	const fadeY = hasRoomY || isFullHeightCanvas ? offsetY * strength : 0;
 
 	const focusX = hasRoomX ? 0.5 : (cursor.cx - crop.x) / crop.width;
 	const focusY = hasRoomY ? 0.5 : (cursor.cy - crop.y) / crop.height;
 
 	return {
-		offset: { x: offsetX, y: offsetY },
+		offset: {
+			x: offsetX,
+			y: offsetY,
+			...(isFullHeightCanvas ? { verticalAnchor, lastCursorY: cursor.cy } : {}),
+		},
 		fade: { x: fadeX, y: fadeY },
 		focus: { cx: focusX, cy: focusY },
 		effectiveCrop: {
