@@ -2162,6 +2162,8 @@ export class FrameRenderer {
 
 		const timeMs = this.currentVideoTime * 1000;
 		const cursorTimeMs = cursorTimestamp / 1000;
+		this.updateAnimationState(timeMs);
+		this.applyFollowContentPan();
 
 		if (this.cursorOverlay) {
 			this.cursorOverlay.update(
@@ -2181,8 +2183,6 @@ export class FrameRenderer {
 				canvasHeight: this.config.height,
 			},
 		);
-
-		this.updateAnimationState(timeMs);
 
 		applyZoomTransform({
 			cameraContainer: this.cameraContainer,
