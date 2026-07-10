@@ -5,8 +5,6 @@ export interface CropPanOffset {
 	y: number;
 	/** Full-height canvas anchor used to keep the cursor near a vertical edge. */
 	verticalAnchor?: "top" | "bottom";
-	/** Previous cursor position used to update the full-height canvas anchor. */
-	lastCursorY?: number;
 }
 
 export interface CropPanStep {
@@ -14,6 +12,10 @@ export interface CropPanStep {
 	offset: CropPanOffset;
 	/** Offset scaled by zoom strength — apply to the video sprite position */
 	fade: CropPanOffset;
+	/** Portion of the fade that moves the source crop and must remain in source bounds. */
+	sourceCropFade: CropPanOffset;
+	/** Canvas-only translation used when projecting cursor and overlay coordinates. */
+	cursorViewportOffset: CropPanOffset;
 	/** Camera focus (mask-relative). 0.5 on panned axes, cursor on full-frame axes */
 	focus: ZoomFocus;
 	/** Effective crop region (base crop + fade) — use as the overlay viewport sourceCrop */
@@ -68,12 +70,12 @@ export function stepCropPanFollow(params: {
 	}
 	let verticalAnchor = prevOffset.verticalAnchor;
 	if (isFullHeightCanvas) {
-		if (prevOffset.lastCursorY === undefined) {
+		if (!verticalAnchor) {
 			verticalAnchor = cursor.cy >= 0.5 ? "bottom" : "top";
-		} else if (cursor.cy > prevOffset.lastCursorY) {
-			verticalAnchor = "bottom";
-		} else if (cursor.cy < prevOffset.lastCursorY) {
+		} else if (verticalAnchor === "bottom" && cursor.cy <= verticalDeadZone) {
 			verticalAnchor = "top";
+		} else if (verticalAnchor === "top" && cursor.cy >= 1 - verticalDeadZone) {
+			verticalAnchor = "bottom";
 		}
 		targetOffsetY =
 			cursor.cy - (verticalAnchor === "bottom" ? 1 - verticalDeadZone : verticalDeadZone);
@@ -93,6 +95,9 @@ export function stepCropPanFollow(params: {
 
 	const fadeX = hasRoomX ? offsetX * strength : 0;
 	const fadeY = hasRoomY || isFullHeightCanvas ? offsetY * strength : 0;
+	const sourceCropFadeX = hasRoomX ? fadeX : 0;
+	const sourceCropFadeY = hasRoomY ? fadeY : 0;
+	const cursorViewportOffsetY = isFullHeightCanvas ? fadeY : 0;
 
 	const focusX = hasRoomX ? 0.5 : (cursor.cx - crop.x) / crop.width;
 	const focusY = hasRoomY ? 0.5 : (cursor.cy - crop.y) / crop.height;
@@ -101,13 +106,15 @@ export function stepCropPanFollow(params: {
 		offset: {
 			x: offsetX,
 			y: offsetY,
-			...(isFullHeightCanvas ? { verticalAnchor, lastCursorY: cursor.cy } : {}),
+			...(isFullHeightCanvas ? { verticalAnchor } : {}),
 		},
 		fade: { x: fadeX, y: fadeY },
+		sourceCropFade: { x: sourceCropFadeX, y: sourceCropFadeY },
+		cursorViewportOffset: { x: 0, y: cursorViewportOffsetY },
 		focus: { cx: focusX, cy: focusY },
 		effectiveCrop: {
-			x: crop.x + fadeX,
-			y: crop.y + fadeY,
+			x: crop.x + sourceCropFadeX,
+			y: crop.y + sourceCropFadeY,
 			width: crop.width,
 			height: crop.height,
 		},

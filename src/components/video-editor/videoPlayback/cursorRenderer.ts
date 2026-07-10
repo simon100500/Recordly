@@ -1342,11 +1342,14 @@ export class PixiCursorOverlay {
 			return;
 		}
 
-		const projectedTarget = projectCursorPositionToViewport(target, viewport.sourceCrop);
+		const projectedTarget = projectCursorPositionToViewport(
+			target,
+			viewport.sourceCrop,
+			viewport.cursorViewportOffset,
+		);
 
 		const h =
-			this.config.dotRadius *
-			getCursorViewportScale(viewport, this.config.minViewportScale);
+			this.config.dotRadius * getCursorViewportScale(viewport, this.config.minViewportScale);
 		const { cursorType, clickSample, clickBounceProgress, clickProgress } =
 			getCursorVisualState(
 				samples,
@@ -1355,7 +1358,11 @@ export class PixiCursorOverlay {
 				this.config.clickEffectDurationMs,
 			);
 		const projectedClickSample = clickSample
-			? projectCursorPositionToViewport(clickSample, viewport.sourceCrop)
+			? projectCursorPositionToViewport(
+					clickSample,
+					viewport.sourceCrop,
+					viewport.cursorViewportOffset,
+				)
 			: null;
 		const clickEffectPx =
 			projectedClickSample && projectedClickSample.visible
@@ -1635,7 +1642,11 @@ export function drawCursorOnCanvas(
 	const target = interpolateCursorPosition(samples, timeMs);
 	if (!target) return;
 
-	const projectedTarget = projectCursorPositionToViewport(target, viewport.sourceCrop);
+	const projectedTarget = projectCursorPositionToViewport(
+		target,
+		viewport.sourceCrop,
+		viewport.cursorViewportOffset,
+	);
 	if (!projectedTarget.visible) return;
 
 	smoothedState.update(projectedTarget.cx, projectedTarget.cy, timeMs);
@@ -1650,7 +1661,11 @@ export function drawCursorOnCanvas(
 		config.clickEffectDurationMs,
 	);
 	const projectedClickSample = clickSample
-		? projectCursorPositionToViewport(clickSample, viewport.sourceCrop)
+		? projectCursorPositionToViewport(
+				clickSample,
+				viewport.sourceCrop,
+				viewport.cursorViewportOffset,
+			)
 		: null;
 	const clickEffectPx =
 		projectedClickSample && projectedClickSample.visible
