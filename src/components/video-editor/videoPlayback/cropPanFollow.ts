@@ -28,46 +28,59 @@ function getVisibleHalfSpan(zoomScale: number) {
 }
 
 /**
- * Lazy-camera focus for an axis where the crop has no pan room.
+ * Zoom-focus computation for a single axis.
  *
- * The focus stays put while the cursor is inside a central safe zone.
- * When the cursor exits, the focus shifts just enough to bring it back
- * to the safe-zone boundary — so the cursor can reach the edge of the
- * visible area without the canvas dragging it to centre.
+ * ``hasRoom = true`` (crop pan active): focus stays centred at 0.5 unless
+ * the cursor would actually leave the visible zoom band — then it shifts
+ * just enough to keep the cursor on-screen.
+ *
+ * ``hasRoom = false`` (no pan room): a lazy-camera safe zone lets the
+ * cursor roam freely in the centre and only shifts once it approaches the
+ * visible edge.
  *
  * ``minMargin`` / ``maxMargin`` let the visible range extend beyond the
  * source bounds, creating empty edge gaps (e.g. for subtitles).
  */
 function computeAxisFocus(
 	prevFocus: number,
-	cursorFocus: number,
+	cursorEff: number,
 	hasRoom: boolean,
 	zoomScale: number,
 	minMarginRatio: number,
 	maxMarginRatio: number,
 ): number {
-	if (hasRoom) return 0.5;
-
 	const halfSpan = getVisibleHalfSpan(zoomScale);
 	if (halfSpan >= 0.5) return 0.5;
 
 	const visibleSpan = halfSpan * 2;
 	const minGap = minMarginRatio * visibleSpan;
 	const maxGap = maxMarginRatio * visibleSpan;
-	const focusMin = halfSpan - minGap;
-	const focusMax = 1 - halfSpan + maxGap;
+	const focusLo = halfSpan - minGap;
+	const focusHi = 1 - halfSpan + maxGap;
+
+	if (hasRoom) {
+		const visLo = 0.5 - halfSpan;
+		const visHi = 0.5 + halfSpan;
+		if (cursorEff < visLo) {
+			return Math.max(focusLo, cursorEff + halfSpan);
+		}
+		if (cursorEff > visHi) {
+			return Math.min(focusHi, cursorEff - halfSpan);
+		}
+		return 0.5;
+	}
 
 	const safeMargin = halfSpan * (1 - 2 * FOCUS_SAFE_ZONE_RATIO);
 	const safeMin = prevFocus - safeMargin;
 	const safeMax = prevFocus + safeMargin;
 
-	if (cursorFocus < safeMin) {
-		return Math.max(focusMin, cursorFocus + safeMargin);
+	if (cursorEff < safeMin) {
+		return Math.max(focusLo, cursorEff + safeMargin);
 	}
-	if (cursorFocus > safeMax) {
-		return Math.min(focusMax, cursorFocus - safeMargin);
+	if (cursorEff > safeMax) {
+		return Math.min(focusHi, cursorEff - safeMargin);
 	}
-	return Math.max(focusMin, Math.min(prevFocus, focusMax));
+	return Math.max(focusLo, Math.min(prevFocus, focusHi));
 }
 
 /**
@@ -141,9 +154,12 @@ export function stepCropPanFollow(params: {
 	const fadeX = hasRoomX ? offsetX * strength : 0;
 	const fadeY = hasRoomY ? offsetY * strength : 0;
 
+	const cursorEffX = (cursor.cx - crop.x - fadeX) / crop.width;
+	const cursorEffY = (cursor.cy - crop.y - fadeY) / crop.height;
+
 	const focusX = computeAxisFocus(
 		prevFocus.cx,
-		(cursor.cx - crop.x) / crop.width,
+		cursorEffX,
 		hasRoomX,
 		zoomScale,
 		margins.left,
@@ -151,7 +167,7 @@ export function stepCropPanFollow(params: {
 	);
 	const focusY = computeAxisFocus(
 		prevFocus.cy,
-		(cursor.cy - crop.y) / crop.height,
+		cursorEffY,
 		hasRoomY,
 		zoomScale,
 		margins.top,
