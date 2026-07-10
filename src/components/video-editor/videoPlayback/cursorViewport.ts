@@ -10,6 +10,8 @@ export interface CursorViewportRect {
 	renderWidth?: number;
 	renderHeight?: number;
 	sourceCrop?: CropRegion;
+	/** Canvas translation applied after source cropping, in source-normalized units. */
+	cursorViewportOffset?: { x: number; y: number };
 }
 
 export interface ProjectedCursorPosition {
@@ -21,6 +23,7 @@ export interface ProjectedCursorPosition {
 export function projectCursorPositionToViewport(
 	position: { cx: number; cy: number },
 	sourceCrop?: CropRegion,
+	cursorViewportOffset?: { x: number; y: number },
 ): ProjectedCursorPosition {
 	if (!sourceCrop) {
 		return {
@@ -41,8 +44,8 @@ export function projectCursorPositionToViewport(
 		};
 	}
 
-	const projectedX = (position.cx - sourceCrop.x) / cropWidth;
-	const projectedY = (position.cy - sourceCrop.y) / cropHeight;
+	const projectedX = (position.cx - sourceCrop.x - (cursorViewportOffset?.x ?? 0)) / cropWidth;
+	const projectedY = (position.cy - sourceCrop.y - (cursorViewportOffset?.y ?? 0)) / cropHeight;
 	const visible =
 		projectedX >= -CURSOR_VIEWPORT_EPSILON &&
 		projectedX <= 1 + CURSOR_VIEWPORT_EPSILON &&

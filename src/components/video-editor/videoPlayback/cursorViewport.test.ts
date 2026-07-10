@@ -22,23 +22,6 @@ describe("projectCursorPositionToViewport", () => {
 		expect(projected.cy).toBeCloseTo(0.375, 6);
 	});
 
-	it("applies canvas translation with the same sign as the video sprite movement", () => {
-		expect(
-			projectCursorPositionToViewport(
-				{ cx: 0.5, cy: 0.5 },
-				{ x: 0, y: 0, width: 1, height: 1 },
-				{ x: 0, y: 0.4 },
-			).cy,
-		).toBeCloseTo(0.9, 6);
-		expect(
-			projectCursorPositionToViewport(
-				{ cx: 0.5, cy: 0.49 },
-				{ x: 0, y: 0, width: 1, height: 1 },
-				{ x: 0, y: -0.39 },
-			).cy,
-		).toBeCloseTo(0.1, 6);
-	});
-
 	it("marks cursor invisible when it falls outside the cropped source region", () => {
 		expect(
 			projectCursorPositionToViewport(

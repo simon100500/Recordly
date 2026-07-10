@@ -57,22 +57,39 @@ describe("stepCropPanFollow", () => {
 		expect(result).not.toBeNull();
 		expect(result!.offset.y).toBe(-0.4);
 		expect(result!.fade.y).toBe(-0.4);
-		expect(result!.effectiveCrop.y).toBe(-0.4);
-		expect((cursor.cy - result!.effectiveCrop.y) / result!.effectiveCrop.height).toBeCloseTo(
-			0.9,
-			6,
-		);
+		expect(result!.effectiveCrop.y).toBe(0);
+		expect(result!.cursorViewportOffset.y).toBe(-0.4);
+		expect(
+			(cursor.cy - result!.effectiveCrop.y - result!.cursorViewportOffset.y) /
+				result!.effectiveCrop.height,
+		).toBeCloseTo(0.9, 6);
 
-		const upwardResult = stepCropPanFollow({
-			cursor: { cx: 0.5, cy: 0.49 },
+		let jitterResult = result!;
+		for (const cy of [0.49, 0.51, 0.48, 0.52]) {
+			jitterResult = stepCropPanFollow({
+				cursor: { cx: 0.5, cy },
+				crop: { x: 0, y: 0, width: 1, height: 1 },
+				prevOffset: jitterResult.offset,
+				strength: 1,
+				smoothFactor: 1,
+			})!;
+
+			expect(jitterResult.offset.verticalAnchor).toBe("bottom");
+			expect(
+				(cy - jitterResult.effectiveCrop.y - jitterResult.cursorViewportOffset.y) /
+					jitterResult.effectiveCrop.height,
+			).toBeCloseTo(0.9, 6);
+		}
+
+		const oppositeBoundaryResult = stepCropPanFollow({
+			cursor: { cx: 0.5, cy: 0.1 },
 			crop: { x: 0, y: 0, width: 1, height: 1 },
-			prevOffset: result!.offset,
+			prevOffset: jitterResult.offset,
 			strength: 1,
 			smoothFactor: 1,
 		});
 
-		expect(upwardResult!.offset.y).toBe(0.39);
-		expect(upwardResult!.offset.verticalAnchor).toBe("top");
+		expect(oppositeBoundaryResult!.offset.verticalAnchor).toBe("top");
 	});
 
 	it("translates a full-height canvas to anchor the initial cursor at the top edge", () => {
@@ -88,10 +105,21 @@ describe("stepCropPanFollow", () => {
 		expect(result).not.toBeNull();
 		expect(result!.offset.y).toBe(0.39);
 		expect(result!.fade.y).toBe(0.39);
-		expect(result!.effectiveCrop.y).toBe(0.39);
-		expect((cursor.cy - result!.effectiveCrop.y) / result!.effectiveCrop.height).toBeCloseTo(
-			0.1,
-			6,
-		);
+		expect(result!.effectiveCrop.y).toBe(0);
+		expect(result!.cursorViewportOffset.y).toBe(0.39);
+		expect(
+			(cursor.cy - result!.effectiveCrop.y - result!.cursorViewportOffset.y) /
+				result!.effectiveCrop.height,
+		).toBeCloseTo(0.1, 6);
+
+		const downwardResult = stepCropPanFollow({
+			cursor: { cx: 0.5, cy: 0.9 },
+			crop: { x: 0, y: 0, width: 1, height: 1 },
+			prevOffset: result!.offset,
+			strength: 1,
+			smoothFactor: 1,
+		});
+
+		expect(downwardResult!.offset.verticalAnchor).toBe("bottom");
 	});
 });
