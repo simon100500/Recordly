@@ -97,7 +97,7 @@ export function stepCropPanFollow(params: {
 	const fadeY = hasRoomY || isFullHeightCanvas ? offsetY * strength : 0;
 	const sourceCropFadeX = hasRoomX ? fadeX : 0;
 	const sourceCropFadeY = hasRoomY ? fadeY : 0;
-	const cursorViewportOffsetY = isFullHeightCanvas ? fadeY : 0;
+	const cursorViewportOffsetY = isFullHeightCanvas ? -fadeY : 0;
 
 	const focusX = hasRoomX ? 0.5 : (cursor.cx - crop.x) / crop.width;
 	const focusY = hasRoomY ? 0.5 : (cursor.cy - crop.y) / crop.height;

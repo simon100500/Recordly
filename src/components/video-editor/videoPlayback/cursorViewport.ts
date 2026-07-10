@@ -44,8 +44,8 @@ export function projectCursorPositionToViewport(
 		};
 	}
 
-	const projectedX = (position.cx - sourceCrop.x - (cursorViewportOffset?.x ?? 0)) / cropWidth;
-	const projectedY = (position.cy - sourceCrop.y - (cursorViewportOffset?.y ?? 0)) / cropHeight;
+	const projectedX = (position.cx - sourceCrop.x + (cursorViewportOffset?.x ?? 0)) / cropWidth;
+	const projectedY = (position.cy - sourceCrop.y + (cursorViewportOffset?.y ?? 0)) / cropHeight;
 	const visible =
 		projectedX >= -CURSOR_VIEWPORT_EPSILON &&
 		projectedX <= 1 + CURSOR_VIEWPORT_EPSILON &&

@@ -58,9 +58,9 @@ describe("stepCropPanFollow", () => {
 		expect(result!.offset.y).toBe(-0.4);
 		expect(result!.fade.y).toBe(-0.4);
 		expect(result!.effectiveCrop.y).toBe(0);
-		expect(result!.cursorViewportOffset.y).toBe(-0.4);
+		expect(result!.cursorViewportOffset.y).toBe(0.4);
 		expect(
-			(cursor.cy - result!.effectiveCrop.y - result!.cursorViewportOffset.y) /
+			(cursor.cy - result!.effectiveCrop.y + result!.cursorViewportOffset.y) /
 				result!.effectiveCrop.height,
 		).toBeCloseTo(0.9, 6);
 
@@ -76,7 +76,7 @@ describe("stepCropPanFollow", () => {
 
 			expect(jitterResult.offset.verticalAnchor).toBe("bottom");
 			expect(
-				(cy - jitterResult.effectiveCrop.y - jitterResult.cursorViewportOffset.y) /
+				(cy - jitterResult.effectiveCrop.y + jitterResult.cursorViewportOffset.y) /
 					jitterResult.effectiveCrop.height,
 			).toBeCloseTo(0.9, 6);
 		}
@@ -106,9 +106,9 @@ describe("stepCropPanFollow", () => {
 		expect(result!.offset.y).toBe(0.39);
 		expect(result!.fade.y).toBe(0.39);
 		expect(result!.effectiveCrop.y).toBe(0);
-		expect(result!.cursorViewportOffset.y).toBe(0.39);
+		expect(result!.cursorViewportOffset.y).toBe(-0.39);
 		expect(
-			(cursor.cy - result!.effectiveCrop.y - result!.cursorViewportOffset.y) /
+			(cursor.cy - result!.effectiveCrop.y + result!.cursorViewportOffset.y) /
 				result!.effectiveCrop.height,
 		).toBeCloseTo(0.1, 6);
 
