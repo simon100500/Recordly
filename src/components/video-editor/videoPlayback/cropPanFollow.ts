@@ -67,13 +67,18 @@ function computeAxisFocus(
 	if (hasRoom) {
 		// Trigger slightly before the cursor reaches the visible edge
 		// and place it CURSOR_EDGE_BUFFER inside the band.
+		// Ramp the margin gap proportional to how close the cursor is
+		// to the source edge so the canvas visibly pulls away.
 		const visLo = 0.5 - halfSpan + CURSOR_EDGE_BUFFER;
 		const visHi = 0.5 + halfSpan - CURSOR_EDGE_BUFFER;
 		if (cursorEff < visLo) {
-			return Math.max(focusLo, cursorEff + halfSpan - CURSOR_EDGE_BUFFER);
+			const proximity = Math.min(1, (visLo - cursorEff) / Math.max(visLo, 0.001));
+			return Math.max(focusLo, cursorEff + halfSpan - CURSOR_EDGE_BUFFER - minGap * proximity);
 		}
 		if (cursorEff > visHi) {
-			return Math.min(focusHi, cursorEff - halfSpan + CURSOR_EDGE_BUFFER);
+			const range = Math.max(1 - visHi, 0.001);
+			const proximity = Math.min(1, (cursorEff - visHi) / range);
+			return Math.min(focusHi, cursorEff - halfSpan + CURSOR_EDGE_BUFFER + maxGap * proximity);
 		}
 		return 0.5;
 	}
