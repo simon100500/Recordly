@@ -2901,11 +2901,16 @@ export default function VideoEditor() {
 
 		setIsGeneratingCaptions(true);
 		try {
+			const externalAudioRegion = [...audioRegions]
+				.filter((region) => region.audioPath.trim().length > 0)
+				.sort((a, b) => a.startMs - b.startMs)[0];
 			const result = await window.electronAPI.generateAutoCaptions({
 				videoPath: sourcePath,
 				whisperExecutablePath: whisperExecutablePath ?? undefined,
 				whisperModelPath,
 				language: autoCaptionSettings.language,
+				externalAudioPath: externalAudioRegion?.audioPath,
+				externalAudioStartMs: externalAudioRegion?.startMs,
 			});
 
 			if (!result.success || !result.cues) {
@@ -2933,6 +2938,7 @@ export default function VideoEditor() {
 		videoSourcePath,
 		whisperExecutablePath,
 		whisperModelPath,
+		audioRegions,
 	]);
 
 	const handleClearAutoCaptions = useCallback(() => {

@@ -230,6 +230,8 @@ export function registerCaptionHandlers() {
 				whisperExecutablePath: string;
 				whisperModelPath: string;
 				language?: string;
+				externalAudioPath?: string | null;
+				externalAudioStartMs?: number;
 			},
 		) => {
 			try {

@@ -702,6 +702,8 @@ interface Window {
 			whisperExecutablePath?: string;
 			whisperModelPath: string;
 			language?: string;
+			externalAudioPath?: string | null;
+			externalAudioStartMs?: number;
 		}) => Promise<{
 			success: boolean;
 			cues?: AutoCaptionCue[];
