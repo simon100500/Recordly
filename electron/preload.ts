@@ -540,6 +540,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	storeRecordedVideo: (videoData: ArrayBuffer, fileName: string) => {
 		return ipcRenderer.invoke("store-recorded-video", videoData, fileName);
 	},
+	storeVoiceoverAudio: (audioData: ArrayBuffer, fileName: string) => {
+		return ipcRenderer.invoke("store-voiceover-audio", audioData, fileName);
+	},
 	storeMicrophoneSidecar: (
 		audioData: ArrayBuffer,
 		videoPath: string,
@@ -717,6 +720,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		whisperExecutablePath?: string;
 		whisperModelPath: string;
 		language?: string;
+		externalAudioPath?: string | null;
+		externalAudioStartMs?: number;
 	}) => {
 		return ipcRenderer.invoke("generate-auto-captions", options);
 	},

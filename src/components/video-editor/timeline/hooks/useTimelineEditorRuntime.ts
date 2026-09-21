@@ -11,7 +11,7 @@ import type {
 	ZoomFocus,
 	ZoomRegion,
 } from "../../types";
-import type { TimelineShortcutBindings } from "../core/timelineTypes";
+import type { AudioPeaksData, TimelineShortcutBindings } from "../core/timelineTypes";
 import type { TimelineEditorHandle } from "../TimelineEditor";
 import { useTimelineAudioActions } from "./actions/useTimelineAudioActions";
 import { useTimelineZoomActions } from "./actions/useTimelineZoomActions";
@@ -30,6 +30,7 @@ interface UseTimelineEditorRuntimeParams {
 	autoSuggestZoomsTrigger: number;
 	onAutoSuggestZoomsConsumed?: () => void;
 	disableSuggestedZooms: boolean;
+	sourceAudioPeaks: AudioPeaksData | null;
 	zoomRegions: ZoomRegion[];
 	onZoomAdded: (span: Span) => void;
 	onZoomSuggested?: (span: Span, focus: ZoomFocus) => void;
@@ -74,6 +75,7 @@ export function useTimelineEditorRuntime({
 	autoSuggestZoomsTrigger,
 	onAutoSuggestZoomsConsumed,
 	disableSuggestedZooms,
+	sourceAudioPeaks,
 	zoomRegions,
 	onZoomAdded,
 	onZoomSuggested,
@@ -265,6 +267,7 @@ export function useTimelineEditorRuntime({
 			splitClip: handleSplitClip,
 			addAnnotation: handleAddAnnotation,
 			addAudio: handleAddAudio,
+			getSourceAudioPeaks: () => sourceAudioPeaks,
 			keyframes,
 		}),
 		[
@@ -273,6 +276,7 @@ export function useTimelineEditorRuntime({
 			handleAddZoom,
 			handleSuggestZooms,
 			handleSplitClip,
+			sourceAudioPeaks,
 			keyframes,
 		],
 	);

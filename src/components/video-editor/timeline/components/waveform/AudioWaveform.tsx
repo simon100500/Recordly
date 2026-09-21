@@ -1,126 +1,117 @@
 import { useTimelineContext } from "dnd-timeline";
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useMemo } from "react";
+import { cn } from "@/lib/utils";
 import type { AudioPeaksData } from "../../core/timelineTypes";
 
 interface AudioWaveformProps {
 	peaks: AudioPeaksData;
 	segmentStartMs?: number;
 	segmentEndMs?: number;
+	displayStartMs?: number;
+	displayEndMs?: number;
 	gain?: number;
 	normalize?: boolean;
 	className?: string;
 }
 
+const MAX_BARS = 500;
+const MIN_BARS = 4;
+// Roughly how many CSS pixels one bar occupies. Used to derive the bar count
+// from the clip's zoom level — bounded so we never render too many DOM nodes.
+const BAR_PITCH_CSS = 2;
+
 /**
- * Renders an audio waveform as a canvas that fills its parent container.
- * Automatically syncs with the timeline's visible range so the waveform
- * scrolls and zooms together with the clip items above it.
+ * Audio waveform as plain DOM bars — NO canvas.
+ *
+ * The bars are flex children of the clip, so they move with it natively (same
+ * React commit) — no separate draw loop to drift out of sync.
+ *
+ * IMPORTANT — zoom/pan correctness: when a clip is wider than the viewport,
+ * dnd-timeline pins the clip's content box to the visible window (via padding).
+ * So we must render bars only for the portion of the audio that is CURRENTLY
+ * VISIBLE (the intersection of the clip with the timeline range, mapped to
+ * source time). As the user pans, the visible window changes → the bars update
+ * → the waveform scrolls. Rendering the whole segment would look static in that
+ * pinned state. Each bar keeps the max peak level in its time slice.
  */
 function AudioWaveformComponent({
 	peaks,
 	segmentStartMs,
 	segmentEndMs,
+	displayStartMs,
+	displayEndMs,
 	gain = 1,
 	normalize = false,
 	className,
 }: AudioWaveformProps) {
-	const canvasRef = useRef<HTMLCanvasElement>(null);
-	const { range } = useTimelineContext();
-	const [resizeKey, setResizeKey] = useState(0);
-	const lastDrawAtRef = useRef(0);
+	const { range, valueToPixels } = useTimelineContext();
 
-	// Bump resizeKey when the canvas element changes size.
-	const observerRef = useRef<ResizeObserver | null>(null);
-	const setCanvasRef = useCallback((node: HTMLCanvasElement | null) => {
-		if (observerRef.current) {
-			observerRef.current.disconnect();
-			observerRef.current = null;
+	// Display span = where the clip sits on the timeline; segment span = which
+	// part of the source audio it plays back.
+	const dispStart = displayStartMs ?? segmentStartMs ?? range.start;
+	const dispEnd = displayEndMs ?? segmentEndMs ?? range.end;
+	const segStart = segmentStartMs ?? dispStart;
+	const segEnd = segmentEndMs ?? dispEnd;
+	const dispDur = Math.max(0, dispEnd - dispStart);
+	const segDur = Math.max(0, segEnd - segStart);
+
+	// Visible timeline window within this clip.
+	const visTLStart = Math.max(dispStart, range.start);
+	const visTLEnd = Math.min(dispEnd, range.end);
+	const visTLDur = Math.max(0, visTLEnd - visTLStart);
+
+	// Map the visible timeline window to source audio time.
+	const toSrc = (tlMs: number) =>
+		dispDur > 0 && segDur > 0 ? segStart + ((tlMs - dispStart) / dispDur) * segDur : tlMs;
+	const visSrcStart = toSrc(visTLStart);
+	const visSrcEnd = toSrc(visTLEnd);
+	const visSrcDur = Math.max(0, visSrcEnd - visSrcStart);
+
+	// Bar count follows the VISIBLE width (the pinned content box), not the
+	// whole clip — so resolution stays high at every zoom level.
+	const numBars = useMemo(() => {
+		if (visTLDur <= 0) return 0;
+		const widthCss = valueToPixels(visTLDur);
+		return Math.max(MIN_BARS, Math.min(MAX_BARS, Math.round(widthCss / BAR_PITCH_CSS)));
+	}, [visTLDur, valueToPixels]);
+
+	const bars = useMemo(() => {
+		const { peaks: peakData, durationMs } = peaks;
+		if (numBars === 0 || durationMs <= 0 || peakData.length === 0 || visSrcDur <= 0) {
+			return [] as number[];
 		}
-		(canvasRef as React.MutableRefObject<HTMLCanvasElement | null>).current = node;
-		if (node) {
-			const ro = new ResizeObserver(() => setResizeKey((k) => k + 1));
-			ro.observe(node);
-			observerRef.current = ro;
+		const n = peakData.length;
+		const denom = Math.max(1, n - 1);
+		const levels = new Array<number>(numBars).fill(0);
+		for (let i = 0; i < n; i++) {
+			const t = (i / denom) * durationMs;
+			if (t < visSrcStart || t > visSrcEnd) continue;
+			const frac = (t - visSrcStart) / visSrcDur;
+			const idx = Math.min(numBars - 1, Math.floor(frac * numBars));
+			let amp = peakData[i];
+			if (normalize) amp = Math.sqrt(Math.max(0, amp));
+			amp = Math.max(0, Math.min(1, amp * gain));
+			if (amp > levels[idx]) levels[idx] = amp;
 		}
-	}, []);
+		return levels;
+	}, [peaks, visSrcStart, visSrcEnd, visSrcDur, numBars, gain, normalize]);
 
-	useEffect(() => {
-		const canvas = canvasRef.current;
-		if (!canvas) return;
-		let rafId = 0;
-
-		const draw = () => {
-			const now = performance.now();
-			if (now - lastDrawAtRef.current < 33) {
-				rafId = requestAnimationFrame(draw);
-				return;
-			}
-			lastDrawAtRef.current = now;
-
-			const ctx = canvas.getContext("2d");
-			if (!ctx) return;
-
-			const rect = canvas.getBoundingClientRect();
-			const dpr = window.devicePixelRatio || 1;
-			const width = Math.round(rect.width * dpr);
-			const height = Math.round(rect.height * dpr);
-
-			if (width === 0 || height === 0) return;
-
-			canvas.width = width;
-			canvas.height = height;
-
-			ctx.clearRect(0, 0, width, height);
-
-			const { peaks: peakData, durationMs } = peaks;
-			if (durationMs <= 0 || peakData.length === 0) return;
-
-			// Use raw values for smooth zooming/panning (no snapping)
-			const visibleStartMs = segmentStartMs ?? range.start;
-			const visibleEndMs = segmentEndMs ?? range.end;
-			const visibleDurationMs = visibleEndMs - visibleStartMs;
-			
-			if (visibleDurationMs <= 0) return;
-
-			const midY = height / 2;
-			ctx.beginPath();
-			
-			for (let px = 0; px < width; px++) {
-				const t = visibleStartMs + (px / width) * visibleDurationMs;
-				
-				// If the timeline time is beyond the actual audio duration, we draw nothing (flat line)
-				if (t < 0 || t > durationMs) continue;
-
-				const exactIndex = (t / durationMs) * (peakData.length - 1);
-				const leftIndex = Math.floor(exactIndex);
-				const rightIndex = Math.min(peakData.length - 1, leftIndex + 1);
-				const mix = exactIndex - leftIndex;
-				
-				let amplitude = peakData[leftIndex] * (1 - mix) + peakData[rightIndex] * mix;
-				
-				if (normalize) amplitude = Math.sqrt(Math.max(0, amplitude));
-				amplitude = Math.max(0, Math.min(1, amplitude * gain));
-				
-				const barHeight = amplitude * midY * 0.85;
-
-				ctx.moveTo(px, midY - barHeight);
-				ctx.lineTo(px, midY + barHeight);
-			}
-
-			ctx.strokeStyle = "rgba(255, 255, 255, 0.55)";
-			ctx.lineWidth = dpr;
-			ctx.stroke();
-		};
-		rafId = requestAnimationFrame(draw);
-		return () => cancelAnimationFrame(rafId);
-	}, [gain, normalize, peaks, range.start, range.end, resizeKey, segmentStartMs, segmentEndMs]);
+	if (bars.length === 0) return null;
 
 	return (
-		<canvas
-			ref={setCanvasRef}
-			className={className ?? "absolute inset-0 w-full h-full pointer-events-none"}
-			style={{ display: "block" }}
-		/>
+		<div className={cn(className, "flex items-end gap-px")}>
+			{bars.map((level, i) => (
+				<div
+					key={i}
+					className="flex-1 rounded-[1px]"
+					style={{
+						height: `${Math.round(level * 100)}%`,
+						minHeight: level > 0 ? 1 : 0,
+						backgroundColor: "currentColor",
+					}}
+				/>
+			))}
+		</div>
 	);
 }
 

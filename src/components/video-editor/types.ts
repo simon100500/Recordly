@@ -1,11 +1,27 @@
-export type ZoomDepth = 1 | 2 | 3 | 4 | 5 | 6;
+export type ZoomDepth = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
 export interface ZoomFocus {
 	cx: number; // normalized horizontal center (0-1)
 	cy: number; // normalized vertical center (0-1)
 }
 
-export type ZoomMode = "auto" | "manual";
+export type ZoomMode = "auto" | "manual" | "follow";
+
+export interface FollowMargins {
+	top: number;
+	bottom: number;
+	left: number;
+	right: number;
+}
+
+export const DEFAULT_FOLLOW_MARGINS: FollowMargins = {
+	top: 0,
+	bottom: 0,
+	left: 0,
+	right: 0,
+};
+
+export const MAX_FOLLOW_MARGIN = 0.15;
 
 export interface ZoomRegion {
 	id: string;
@@ -14,6 +30,7 @@ export interface ZoomRegion {
 	depth: ZoomDepth;
 	focus: ZoomFocus;
 	mode?: ZoomMode;
+	followMargins?: FollowMargins;
 }
 
 export interface CursorTelemetryPoint {
@@ -111,6 +128,7 @@ export type EditorEffectSection =
 	| "extensions"
 	| "clip"
 	| "audio"
+	| "silence"
 	| `ext:${string}`;
 
 export type ZoomTransitionEasing = "recordly" | "glide" | "smooth" | "snappy" | "linear";
@@ -221,12 +239,14 @@ export interface ClipRegion {
 	speed: number;
 	muted?: boolean;
 	showSourceAudio?: boolean;
+	sourceStartMs?: number;
 }
 
 export function getClipSourceEndMs(clip: ClipRegion): number {
 	const displayDurationMs = Math.max(0, clip.endMs - clip.startMs);
 	const speed = Number.isFinite(clip.speed) && clip.speed > 0 ? clip.speed : 1;
-	return Math.round(clip.startMs + displayDurationMs * speed);
+	const srcStart = clip.sourceStartMs ?? clip.startMs;
+	return Math.round(srcStart + displayDurationMs * speed);
 }
 
 export function getTimelineDurationMs(clips: ClipRegion[], sourceDurationMs: number): number {
@@ -258,10 +278,9 @@ function clampToNearestClipBoundary(
 	let nearestDistance = Number.POSITIVE_INFINITY;
 
 	for (const clip of clips) {
+		const srcStart = clip.sourceStartMs ?? clip.startMs;
 		const boundaries =
-			kind === "timeline"
-				? [clip.startMs, clip.endMs]
-				: [clip.startMs, getClipSourceEndMs(clip)];
+			kind === "timeline" ? [clip.startMs, clip.endMs] : [srcStart, getClipSourceEndMs(clip)];
 
 		for (const boundary of boundaries) {
 			const distance = Math.abs(timeMs - boundary);
@@ -284,7 +303,8 @@ export function mapTimelineTimeToSourceTime(timeMs: number, clips: ClipRegion[])
 			continue;
 		}
 
-		return Math.round(clip.startMs + (roundedTimeMs - clip.startMs) * getSafeClipSpeed(clip));
+		const srcStart = clip.sourceStartMs ?? clip.startMs;
+		return Math.round(srcStart + (roundedTimeMs - clip.startMs) * getSafeClipSpeed(clip));
 	}
 
 	if (sortedClips.length === 0) {
@@ -294,17 +314,35 @@ export function mapTimelineTimeToSourceTime(timeMs: number, clips: ClipRegion[])
 	return clampToNearestClipBoundary(roundedTimeMs, sortedClips, "timeline");
 }
 
-export function mapSourceTimeToTimelineTime(timeMs: number, clips: ClipRegion[]): number {
+export function mapSourceTimeToTimelineTime(
+	timeMs: number,
+	clips: ClipRegion[],
+	preferredTimelineTimeMs?: number,
+): number {
 	const roundedTimeMs = Math.round(timeMs);
 	const sortedClips = sortClipRegions(clips);
+	const matches: number[] = [];
 
 	for (const clip of sortedClips) {
+		const srcStart = clip.sourceStartMs ?? clip.startMs;
 		const sourceEndMs = getClipSourceEndMs(clip);
-		if (roundedTimeMs < clip.startMs || roundedTimeMs > sourceEndMs) {
+		if (roundedTimeMs < srcStart || roundedTimeMs > sourceEndMs) {
 			continue;
 		}
 
-		return Math.round(clip.startMs + (roundedTimeMs - clip.startMs) / getSafeClipSpeed(clip));
+		matches.push(
+			Math.round(clip.startMs + (roundedTimeMs - srcStart) / getSafeClipSpeed(clip)),
+		);
+	}
+
+	if (matches.length > 0) {
+		if (Number.isFinite(preferredTimelineTimeMs)) {
+			const preferred = Math.round(preferredTimelineTimeMs ?? matches[0]);
+			return matches.reduce((best, candidate) =>
+				Math.abs(candidate - preferred) < Math.abs(best - preferred) ? candidate : best,
+			);
+		}
+		return matches[0];
 	}
 
 	if (sortedClips.length === 0) {
@@ -355,15 +393,18 @@ export function extendAutoFullTrackClip(
 /** Convert clip regions (kept segments) to trim regions (gaps to remove). */
 export function clipsToTrims(clips: ClipRegion[], totalDurationMs: number): TrimRegion[] {
 	if (clips.length === 0) return [];
-	const sorted = [...clips].sort((a, b) => a.startMs - b.startMs);
+	const sorted = [...clips].sort(
+		(a, b) => (a.sourceStartMs ?? a.startMs) - (b.sourceStartMs ?? b.startMs),
+	);
 	const trims: TrimRegion[] = [];
 	let cursor = 0;
 	let trimId = 1;
 	for (const clip of sorted) {
-		if (clip.startMs > cursor) {
-			trims.push({ id: `trim-gap-${trimId++}`, startMs: cursor, endMs: clip.startMs });
+		const srcStart = clip.sourceStartMs ?? clip.startMs;
+		if (srcStart > cursor) {
+			trims.push({ id: `trim-gap-${trimId++}`, startMs: cursor, endMs: srcStart });
 		}
-		cursor = getClipSourceEndMs(clip);
+		cursor = Math.max(cursor, getClipSourceEndMs(clip));
 	}
 	if (cursor < totalDurationMs) {
 		trims.push({ id: `trim-gap-${trimId++}`, startMs: cursor, endMs: totalDurationMs });
@@ -373,19 +414,32 @@ export function clipsToTrims(clips: ClipRegion[], totalDurationMs: number): Trim
 
 /** Convert legacy trim regions to clip regions (complement). */
 export function trimsToClips(trims: TrimRegion[], totalDurationMs: number): ClipRegion[] {
-	if (trims.length === 0) return [{ id: "clip-1", startMs: 0, endMs: totalDurationMs, speed: 1 }];
+	if (trims.length === 0)
+		return [{ id: "clip-1", startMs: 0, endMs: totalDurationMs, speed: 1, sourceStartMs: 0 }];
 	const sorted = [...trims].sort((a, b) => a.startMs - b.startMs);
 	const clips: ClipRegion[] = [];
 	let cursor = 0;
 	let clipId = 1;
 	for (const trim of sorted) {
 		if (trim.startMs > cursor) {
-			clips.push({ id: `clip-${clipId++}`, startMs: cursor, endMs: trim.startMs, speed: 1 });
+			clips.push({
+				id: `clip-${clipId++}`,
+				startMs: cursor,
+				endMs: trim.startMs,
+				speed: 1,
+				sourceStartMs: cursor,
+			});
 		}
 		cursor = trim.endMs;
 	}
 	if (cursor < totalDurationMs) {
-		clips.push({ id: `clip-${clipId++}`, startMs: cursor, endMs: totalDurationMs, speed: 1 });
+		clips.push({
+			id: `clip-${clipId++}`,
+			startMs: cursor,
+			endMs: totalDurationMs,
+			speed: 1,
+			sourceStartMs: cursor,
+		});
 	}
 	return clips;
 }
@@ -602,6 +656,7 @@ export const SPEED_OPTIONS: Array<{ speed: PlaybackSpeed; label: string }> = [
 export const DEFAULT_PLAYBACK_SPEED: PlaybackSpeed = 1.5;
 
 export const ZOOM_DEPTH_SCALES: Record<ZoomDepth, number> = {
+	0: 1.0,
 	1: 1.25,
 	2: 1.5,
 	3: 1.8,
@@ -617,6 +672,31 @@ export function clampFocusToDepth(focus: ZoomFocus, _depth: ZoomDepth): ZoomFocu
 	return {
 		cx: clamp(focus.cx, 0, 1),
 		cy: clamp(focus.cy, 0, 1),
+	};
+}
+
+export interface SilenceDetectionSettings {
+	sensitivity: number;
+	minSilenceMs: number;
+	minRegionMs: number;
+	paddingMs: number;
+	collapse: boolean;
+}
+
+export const DEFAULT_SILENCE_DETECTION_SETTINGS: SilenceDetectionSettings = {
+	sensitivity: 0.035,
+	minSilenceMs: 500,
+	minRegionMs: 200,
+	paddingMs: 100,
+	collapse: true,
+};
+
+export function getSilenceDetectionSettings(
+	overrides?: Partial<SilenceDetectionSettings>,
+): SilenceDetectionSettings {
+	return {
+		...DEFAULT_SILENCE_DETECTION_SETTINGS,
+		...overrides,
 	};
 }
 

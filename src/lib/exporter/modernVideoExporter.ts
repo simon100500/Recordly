@@ -1562,6 +1562,9 @@ export class ModernVideoExporter {
 		if (hasZoomRegions && this.config.experimentalNativeExport !== true) {
 			reasons.push("native-zoom-requires-windows-gpu");
 		}
+		if ((this.config.zoomRegions ?? []).some((r) => r.mode === "follow")) {
+			reasons.push("unsupported-follow-crop-pan");
+		}
 		if ((this.config.annotationRegions ?? []).length > 0) {
 			reasons.push("unsupported-annotation-overlay");
 		}

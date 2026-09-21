@@ -205,4 +205,97 @@ describe("createVideoEventHandlers", () => {
 		expect(video.currentTime).toBe(2);
 		expect(onTimeUpdate).toHaveBeenLastCalledWith(2);
 	});
+
+	it("jumps from a timeline segment end to the next segment source start", () => {
+		let animationFrameCallback: FrameRequestCallback | null = null;
+		requestAnimationFrameMock.mockImplementation((callback: FrameRequestCallback) => {
+			animationFrameCallback = callback;
+			return 31;
+		});
+		const video = createMockVideo({ currentTime: 5.51, duration: 10 });
+		const onTimeUpdate = vi.fn();
+		const handlers = createVideoEventHandlers({
+			video,
+			isSeekingRef: createMutableRef(false),
+			isPlayingRef: createMutableRef(false),
+			allowPlaybackRef: createMutableRef(true),
+			currentTimeRef: createMutableRef(5_500),
+			timeUpdateAnimationRef: createMutableRef<number | null>(null),
+			onPlayStateChange: vi.fn(),
+			onTimeUpdate,
+			trimRegionsRef: createMutableRef([]),
+			speedRegionsRef: createMutableRef([]),
+			timelineSegmentsRef: createMutableRef([
+				{
+					clipId: "clip-1",
+					outputStartMs: 0,
+					outputEndMs: 5_500,
+					sourceStartMs: 0,
+					sourceEndMs: 5_500,
+					speed: 1,
+				},
+				{
+					clipId: "clip-2",
+					outputStartMs: 5_500,
+					outputEndMs: 8_500,
+					sourceStartMs: 4_000,
+					sourceEndMs: 7_000,
+					speed: 1,
+				},
+			]),
+			timelineTimeRef: createMutableRef(5_500),
+		});
+
+		handlers.handlePlay();
+		animationFrameCallback?.(0);
+
+		expect(video.currentTime).toBe(4);
+		expect(onTimeUpdate).toHaveBeenLastCalledWith(4);
+	});
+
+	it("uses the preferred timeline time to keep repeated source ranges on the intended segment", () => {
+		const video = createMockVideo({ currentTime: 4.25, paused: true });
+		const onTimeUpdate = vi.fn();
+		const handlers = createVideoEventHandlers({
+			video,
+			isSeekingRef: createMutableRef(true),
+			isPlayingRef: createMutableRef(false),
+			allowPlaybackRef: createMutableRef(true),
+			currentTimeRef: createMutableRef(4_250),
+			timeUpdateAnimationRef: createMutableRef<number | null>(null),
+			onPlayStateChange: vi.fn(),
+			onTimeUpdate,
+			trimRegionsRef: createMutableRef([]),
+			speedRegionsRef: createMutableRef([]),
+			timelineSegmentsRef: createMutableRef([
+				{
+					clipId: "clip-1",
+					outputStartMs: 0,
+					outputEndMs: 5_500,
+					sourceStartMs: 0,
+					sourceEndMs: 5_500,
+					speed: 1,
+				},
+				{
+					clipId: "clip-2",
+					outputStartMs: 5_500,
+					outputEndMs: 8_500,
+					sourceStartMs: 4_000,
+					sourceEndMs: 7_000,
+					speed: 1,
+				},
+			]),
+			timelineTimeRef: createMutableRef(5_750),
+		});
+
+		handlers.handleSeeked();
+		video.currentTime = 5.51;
+		video.paused = false;
+		handlers.handlePlay();
+		const animationFrameCallback = requestAnimationFrameMock.mock.calls.at(-1)?.[0];
+		animationFrameCallback?.(0);
+
+		expect(video.currentTime).toBe(5.51);
+		expect(onTimeUpdate).toHaveBeenLastCalledWith(5.51);
+	});
 });

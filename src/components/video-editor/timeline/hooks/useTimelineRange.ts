@@ -1,9 +1,19 @@
 import type { Range } from "dnd-timeline";
-import { useCallback, useEffect, useMemo, useState, type RefObject, type WheelEvent } from "react";
+import {
+	type RefObject,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+	type WheelEvent,
+} from "react";
 import { createInitialRange, normalizeWheelDeltaToPixels } from "../core/time";
+import { clampRange } from "../dnd/engine";
 
 interface UseTimelineRangeParams {
 	totalMs: number;
+	minVisibleRangeMs: number;
 	timelineContainerRef: RefObject<HTMLDivElement>;
 }
 
@@ -41,22 +51,63 @@ export function resolveTimelineWheelPanDeltaPx({
 	return 0;
 }
 
-export function useTimelineRange({ totalMs, timelineContainerRef }: UseTimelineRangeParams) {
+export function resolveRangeAfterTotalMsChange({
+	previousRange,
+	previousTotalMs,
+	nextTotalMs,
+}: {
+	previousRange: Range;
+	previousTotalMs: number;
+	nextTotalMs: number;
+}): Range {
+	const safeNextTotalMs = Math.max(0, Math.round(nextTotalMs));
+	if (safeNextTotalMs <= 0) {
+		return createInitialRange(safeNextTotalMs);
+	}
+
+	const safePreviousTotalMs = Math.max(0, Math.round(previousTotalMs));
+	if (safePreviousTotalMs <= 0) {
+		return createInitialRange(safeNextTotalMs);
+	}
+
+	const previousVisibleSpan = Math.max(1, previousRange.end - previousRange.start);
+	const visibleSpan = Math.min(previousVisibleSpan, safeNextTotalMs);
+	const maxStart = Math.max(0, safeNextTotalMs - visibleSpan);
+	const wasAnchoredToEnd = Math.abs(previousRange.end - safePreviousTotalMs) <= 1;
+	const start = wasAnchoredToEnd
+		? maxStart
+		: Math.max(0, Math.min(previousRange.start, maxStart));
+
+	return { start, end: start + visibleSpan };
+}
+
+export function useTimelineRange({
+	totalMs,
+	minVisibleRangeMs,
+	timelineContainerRef,
+}: UseTimelineRangeParams) {
 	const [range, setRange] = useState<Range>(() => createInitialRange(totalMs));
+	const previousTotalMsRef = useRef(totalMs);
 
 	useEffect(() => {
-		setRange(createInitialRange(totalMs));
+		const previousTotalMs = previousTotalMsRef.current;
+		previousTotalMsRef.current = totalMs;
+		if (previousTotalMs === totalMs) return;
+		setRange((previousRange) =>
+			resolveRangeAfterTotalMsChange({
+				previousRange,
+				previousTotalMs,
+				nextTotalMs: totalMs,
+			}),
+		);
 	}, [totalMs]);
 
 	const clampedRange = useMemo<Range>(() => {
 		if (totalMs === 0) {
 			return range;
 		}
-		return {
-			start: Math.max(0, Math.min(range.start, totalMs)),
-			end: Math.min(range.end, totalMs),
-		};
-	}, [range, totalMs]);
+		return clampRange(range, { totalMs, minVisibleRangeMs });
+	}, [range, totalMs, minVisibleRangeMs]);
 
 	const panTimelineRange = useCallback(
 		(deltaMs: number) => {
@@ -110,10 +161,36 @@ export function useTimelineRange({ totalMs, timelineContainerRef }: UseTimelineR
 		[clampedRange.end, clampedRange.start, panTimelineRange, timelineContainerRef, totalMs],
 	);
 
+	const fitToScreen = useCallback(() => {
+		if (totalMs <= 0) return;
+		setRange({ start: 0, end: totalMs });
+	}, [totalMs]);
+
+	// factor < 1 zooms in (smaller visible span), factor > 1 zooms out (wider).
+	// Anchored at the center of the visible range and allowed to exceed the
+	// content duration (up to 2x) so the user can pull below "fit to screen".
+	const zoomByFactor = useCallback(
+		(factor: number) => {
+			if (totalMs <= 0) return;
+			setRange((previous) => {
+				const span = Math.max(1, previous.end - previous.start);
+				const maxSpan = totalMs * 2;
+				const newSpan = Math.max(minVisibleRangeMs, Math.min(maxSpan, span * factor));
+				if (Math.abs(newSpan - span) < 0.5) return previous;
+				const center = previous.start + span / 2;
+				const start = center - newSpan / 2;
+				return { start, end: start + newSpan };
+			});
+		},
+		[minVisibleRangeMs, totalMs],
+	);
+
 	return {
 		range,
 		setRange,
 		clampedRange,
 		handleTimelineWheel,
+		zoomByFactor,
+		fitToScreen,
 	};
 }

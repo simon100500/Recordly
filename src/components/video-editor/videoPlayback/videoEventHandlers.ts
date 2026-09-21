@@ -3,6 +3,15 @@ import { extensionHost } from "@/lib/extensions";
 import { enablePitchPreservingPlayback } from "@/lib/mediaTiming";
 import type { SpeedRegion, TrimRegion } from "../types";
 
+export interface PlaybackTimelineSegment {
+	clipId: string;
+	outputStartMs: number;
+	outputEndMs: number;
+	sourceStartMs: number;
+	sourceEndMs: number;
+	speed: number;
+}
+
 interface PresentedFrameMetadata {
 	mediaTime?: number;
 }
@@ -25,6 +34,8 @@ interface VideoEventHandlersParams {
 	onTimeUpdate: (time: number) => void;
 	trimRegionsRef: React.MutableRefObject<TrimRegion[]>;
 	speedRegionsRef: React.MutableRefObject<SpeedRegion[]>;
+	timelineSegmentsRef?: React.MutableRefObject<PlaybackTimelineSegment[]>;
+	timelineTimeRef?: React.MutableRefObject<number>;
 }
 
 export function createVideoEventHandlers(params: VideoEventHandlersParams) {
@@ -39,9 +50,12 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 		onTimeUpdate,
 		trimRegionsRef,
 		speedRegionsRef,
+		timelineSegmentsRef,
+		timelineTimeRef,
 	} = params;
 	const presentedFrameVideo = video as PresentedFrameVideoElement;
 	let videoFrameRequestId: number | null = null;
+	let activeTimelineSegment: PlaybackTimelineSegment | null = null;
 	enablePitchPreservingPlayback(video);
 
 	const emitTime = (timeValue: number) => {
@@ -67,6 +81,103 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 				(region) => currentTimeMs >= region.startMs && currentTimeMs < region.endMs,
 			) || null
 		);
+	};
+
+	const getSortedTimelineSegments = () =>
+		[...(timelineSegmentsRef?.current ?? [])].sort(
+			(left, right) => left.outputStartMs - right.outputStartMs,
+		);
+
+	const mapSourceMsToOutputMs = (sourceTimeMs: number, segment: PlaybackTimelineSegment) => {
+		const speed = Number.isFinite(segment.speed) && segment.speed > 0 ? segment.speed : 1;
+		return Math.round(segment.outputStartMs + (sourceTimeMs - segment.sourceStartMs) / speed);
+	};
+
+	const findTimelineSegmentForSourceTime = (
+		sourceTimeMs: number,
+		options: { includeEnd?: boolean } = {},
+	): PlaybackTimelineSegment | null => {
+		const segments = getSortedTimelineSegments();
+		if (segments.length === 0) return null;
+
+		const candidates = segments.filter((segment) => {
+			const beforeEnd = options.includeEnd
+				? sourceTimeMs <= segment.sourceEndMs
+				: sourceTimeMs < segment.sourceEndMs;
+			return sourceTimeMs >= segment.sourceStartMs && beforeEnd;
+		});
+		if (candidates.length === 0) return null;
+		if (
+			activeTimelineSegment &&
+			candidates.some((segment) => segment === activeTimelineSegment)
+		) {
+			return activeTimelineSegment;
+		}
+
+		const preferredOutputMs = timelineTimeRef?.current;
+		if (Number.isFinite(preferredOutputMs)) {
+			return candidates.reduce((best, candidate) =>
+				Math.abs(
+					mapSourceMsToOutputMs(sourceTimeMs, candidate) - (preferredOutputMs ?? 0),
+				) < Math.abs(mapSourceMsToOutputMs(sourceTimeMs, best) - (preferredOutputMs ?? 0))
+					? candidate
+					: best,
+			);
+		}
+
+		return candidates[0];
+	};
+
+	const getNextTimelineSegment = (
+		segment: PlaybackTimelineSegment,
+	): PlaybackTimelineSegment | null => {
+		const segments = getSortedTimelineSegments();
+		const segmentIndex = segments.findIndex((candidate) => candidate.clipId === segment.clipId);
+		if (segmentIndex < 0 || segmentIndex + 1 >= segments.length) return null;
+		return segments[segmentIndex + 1] ?? null;
+	};
+
+	const findEndingTimelineSegmentFromHint = (
+		sourceTimeMs: number,
+	): PlaybackTimelineSegment | null => {
+		const preferredOutputMs = timelineTimeRef?.current;
+		if (!Number.isFinite(preferredOutputMs)) return null;
+
+		return (
+			getSortedTimelineSegments().find(
+				(segment) =>
+					sourceTimeMs >= segment.sourceEndMs &&
+					(preferredOutputMs ?? 0) >= segment.outputStartMs &&
+					(preferredOutputMs ?? 0) <= segment.outputEndMs,
+			) ?? null
+		);
+	};
+
+	const jumpToTimelineSegment = (segment: PlaybackTimelineSegment) => {
+		const targetTime = segment.sourceStartMs / 1000;
+		video.currentTime = targetTime;
+		activeTimelineSegment = segment;
+		if (timelineTimeRef) {
+			timelineTimeRef.current = segment.outputStartMs;
+		}
+		emitTime(targetTime);
+	};
+
+	const maybeJumpAtTimelineSegmentBoundary = (sourceTimeMs: number): boolean => {
+		const segment =
+			activeTimelineSegment ??
+			findEndingTimelineSegmentFromHint(sourceTimeMs) ??
+			findTimelineSegmentForSourceTime(sourceTimeMs, { includeEnd: true });
+		if (!segment || sourceTimeMs < segment.sourceEndMs) {
+			activeTimelineSegment = segment;
+			return false;
+		}
+
+		const nextSegment = getNextTimelineSegment(segment);
+		if (!nextSegment) return false;
+
+		jumpToTimelineSegment(nextSegment);
+		return true;
 	};
 
 	const skipPastTrimRegion = (trimRegion: TrimRegion) => {
@@ -129,6 +240,11 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 
 		const presentedTime = getPresentedTime(metadata);
 		const currentTimeMs = presentedTime * 1000;
+		if (maybeJumpAtTimelineSegmentBoundary(currentTimeMs)) {
+			scheduleNextUpdate();
+			return;
+		}
+
 		const activeTrimRegion = findActiveTrimRegion(currentTimeMs);
 
 		// If we're in a trim region during playback, skip to the end of it
@@ -136,9 +252,17 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 			skipPastTrimRegion(activeTrimRegion);
 		} else {
 			// Apply playback speed from active speed region
+			activeTimelineSegment = findTimelineSegmentForSourceTime(currentTimeMs);
 			const activeSpeedRegion = findActiveSpeedRegion(currentTimeMs);
 			enablePitchPreservingPlayback(video);
-			video.playbackRate = activeSpeedRegion ? activeSpeedRegion.speed : 1;
+			video.playbackRate =
+				activeTimelineSegment?.speed ?? (activeSpeedRegion ? activeSpeedRegion.speed : 1);
+			if (activeTimelineSegment && timelineTimeRef) {
+				timelineTimeRef.current = mapSourceMsToOutputMs(
+					currentTimeMs,
+					activeTimelineSegment,
+				);
+			}
 			emitTime(presentedTime);
 		}
 
@@ -174,12 +298,24 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 		if (activeTrimRegion) {
 			skipPastTrimRegion(activeTrimRegion);
 		} else {
+			activeTimelineSegment = findTimelineSegmentForSourceTime(currentTimeMs, {
+				includeEnd: true,
+			});
+			if (activeTimelineSegment && timelineTimeRef) {
+				timelineTimeRef.current = mapSourceMsToOutputMs(
+					currentTimeMs,
+					activeTimelineSegment,
+				);
+			}
 			emitTime(video.currentTime);
 		}
 	};
 
 	const handleSeeking = () => {
 		isSeekingRef.current = true;
+		activeTimelineSegment = findTimelineSegmentForSourceTime(video.currentTime * 1000, {
+			includeEnd: true,
+		});
 		emitTime(video.currentTime);
 	};
 

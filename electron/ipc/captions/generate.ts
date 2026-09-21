@@ -1,15 +1,20 @@
+import { execFile, spawnSync } from "node:child_process";
 import { constants as fsConstants } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { execFile, spawnSync } from "node:child_process";
 import { promisify } from "node:util";
 import { app } from "electron";
+import { COMPANION_AUDIO_LAYOUTS } from "../constants";
 import { getFfmpegBinaryPath } from "../ffmpeg/binary";
 import { getBundledWhisperExecutableCandidates } from "../paths/binaries";
-import { parseWhisperJsonCues, parseSrtCues, shouldRetryWhisperWithoutJson } from "./parser";
-import { normalizeVideoSourcePath } from "../utils";
 import { resolveRecordingSession } from "../project/session";
-import { COMPANION_AUDIO_LAYOUTS } from "../constants";
+import { normalizeVideoSourcePath } from "../utils";
+import {
+	buildCaptionAudioCandidates,
+	type CaptionAudioCandidate,
+	shiftCaptionCueTimes,
+} from "./audioSource";
+import { parseSrtCues, parseWhisperJsonCues, shouldRetryWhisperWithoutJson } from "./parser";
 
 const execFileAsync = promisify(execFile);
 
@@ -76,21 +81,40 @@ export async function resolveWhisperExecutablePath(preferredPath?: string | null
 	);
 }
 
-export async function resolveCaptionAudioCandidates(videoPath: string) {
-	const candidates: Array<{ path: string; label: string }> = [];
+export async function resolveCaptionAudioCandidates(
+	videoPath: string,
+	options?: {
+		externalAudioPath?: string | null;
+		externalAudioStartMs?: number;
+	},
+) {
+	const candidates: CaptionAudioCandidate[] = buildCaptionAudioCandidates(
+		videoPath,
+		options?.externalAudioPath,
+		options?.externalAudioStartMs,
+	);
 	const seenPaths = new Set<string>();
+	for (const candidate of candidates) {
+		seenPaths.add(candidate.path);
+	}
 
-	const pushCandidate = (candidatePath: string | null | undefined, label: string) => {
+	const pushCandidate = (
+		candidatePath: string | null | undefined,
+		label: string,
+		startMs = 0,
+	) => {
 		const normalizedCandidatePath = normalizeVideoSourcePath(candidatePath);
 		if (!normalizedCandidatePath || seenPaths.has(normalizedCandidatePath)) {
 			return;
 		}
 
 		seenPaths.add(normalizedCandidatePath);
-		candidates.push({ path: normalizedCandidatePath, label });
+		candidates.push({
+			path: normalizedCandidatePath,
+			label,
+			startMs: Number.isFinite(startMs) ? Math.max(0, Math.round(startMs)) : 0,
+		});
 	};
-
-	pushCandidate(videoPath, "recording");
 
 	await pushCompanionAudioCandidates(videoPath, pushCandidate);
 
@@ -132,8 +156,13 @@ export async function extractCaptionAudioSource(options: {
 	videoPath: string;
 	ffmpegPath: string;
 	wavPath: string;
+	externalAudioPath?: string | null;
+	externalAudioStartMs?: number;
 }) {
-	const candidates = await resolveCaptionAudioCandidates(options.videoPath);
+	const candidates = await resolveCaptionAudioCandidates(options.videoPath, {
+		externalAudioPath: options.externalAudioPath,
+		externalAudioStartMs: options.externalAudioStartMs,
+	});
 	const attemptedCandidates: Array<{
 		path: string;
 		label: string;
@@ -191,6 +220,8 @@ export async function generateAutoCaptionsFromVideo(options: {
 	whisperExecutablePath?: string;
 	whisperModelPath: string;
 	language?: string;
+	externalAudioPath?: string | null;
+	externalAudioStartMs?: number;
 }) {
 	const ffmpegPath = getFfmpegBinaryPath();
 	const normalizedVideoPath = normalizeVideoSourcePath(options.videoPath);
@@ -217,6 +248,8 @@ export async function generateAutoCaptionsFromVideo(options: {
 			videoPath: normalizedVideoPath,
 			ffmpegPath,
 			wavPath,
+			externalAudioPath: options.externalAudioPath,
+			externalAudioStartMs: options.externalAudioStartMs,
 		});
 
 		const language =
@@ -266,7 +299,7 @@ export async function generateAutoCaptionsFromVideo(options: {
 		}
 
 		return {
-			cues,
+			cues: shiftCaptionCueTimes(cues, audioSource.startMs),
 			audioSourceLabel: audioSource.label,
 		};
 	} finally {

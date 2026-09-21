@@ -1,5 +1,6 @@
 import {
 	CursorClick,
+	Microphone,
 	Palette,
 	PresentationChart,
 	Trash as Trash2,
@@ -65,13 +66,16 @@ import type {
 	EditorEffectSection,
 	FigureData,
 	Padding,
+	SilenceDetectionSettings,
 	WebcamOverlaySettings,
 	WebcamPositionPreset,
 	ZoomDepth,
 	ZoomMode,
 	ZoomMotionBlurTuning,
 	ZoomTransitionEasing,
+	FollowMargins,
 } from "./types";
+import { DEFAULT_FOLLOW_MARGINS, MAX_FOLLOW_MARGIN } from "./types";
 import {
 	ADVANCED_VERTICAL_PADDING_MAX,
 	DEFAULT_AUTO_CAPTION_SETTINGS,
@@ -88,6 +92,7 @@ import {
 	DEFAULT_CURSOR_STYLE,
 	DEFAULT_CURSOR_SWAY,
 	DEFAULT_PADDING,
+	DEFAULT_SILENCE_DETECTION_SETTINGS,
 	DEFAULT_WEBCAM_CORNER_RADIUS,
 	DEFAULT_WEBCAM_MARGIN,
 	DEFAULT_WEBCAM_POSITION_PRESET,
@@ -179,9 +184,10 @@ function isHexWallpaper(value: string): boolean {
 
 function hexToRgba(hex: string, alpha: number) {
 	const normalized = isHexWallpaper(hex) ? hex : DEFAULT_CURSOR_CLICK_EFFECT_COLOR;
-	const value = normalized.length === 4
-		? `#${normalized[1]}${normalized[1]}${normalized[2]}${normalized[2]}${normalized[3]}${normalized[3]}`
-		: normalized;
+	const value =
+		normalized.length === 4
+			? `#${normalized[1]}${normalized[1]}${normalized[2]}${normalized[2]}${normalized[3]}${normalized[3]}`
+			: normalized;
 	const color = Number.parseInt(value.slice(1), 16);
 	const red = (color >> 16) & 255;
 	const green = (color >> 8) & 255;
@@ -529,8 +535,23 @@ function CursorClickEffectPreview({
 					viewBox="0 0 40 40"
 					aria-hidden="true"
 				>
-					<circle cx="20" cy="20" r="11.5" fill="none" stroke="currentColor" strokeWidth="1.8" opacity="0.75" />
-					<path d="M12.5 27.5 27.5 12.5" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="2.2" opacity="0.92" />
+					<circle
+						cx="20"
+						cy="20"
+						r="11.5"
+						fill="none"
+						stroke="currentColor"
+						strokeWidth="1.8"
+						opacity="0.75"
+					/>
+					<path
+						d="M12.5 27.5 27.5 12.5"
+						fill="none"
+						stroke="currentColor"
+						strokeLinecap="round"
+						strokeWidth="2.2"
+						opacity="0.92"
+					/>
 				</svg>
 			) : null}
 			{effect === "ripple" ? (
@@ -571,13 +592,17 @@ function CursorClickEffectPreview({
 					viewBox="0 0 48 48"
 					aria-hidden="true"
 				>
-					<g
-						fill="none"
-						stroke="currentColor"
-					>
+					<g fill="none" stroke="currentColor">
 						<circle cx="24" cy="24" r="9" strokeWidth="1.8" opacity="0.72" />
 						<circle cx="24" cy="24" r="14.5" strokeWidth="1.5" opacity="0.4" />
-						<circle cx="24" cy="24" r="4.25" fill="currentColor" opacity="0.22" stroke="none" />
+						<circle
+							cx="24"
+							cy="24"
+							r="4.25"
+							fill="currentColor"
+							opacity="0.22"
+							stroke="none"
+						/>
 					</g>
 				</svg>
 			) : null}
@@ -660,7 +685,10 @@ function CursorClickEffectCards({
 						>
 							<div className="flex h-full flex-col items-center justify-between gap-3">
 								<div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-[8px] px-2 py-1.5">
-									<CursorClickEffectPreview effect={effect.id} color={effectColor} />
+									<CursorClickEffectPreview
+										effect={effect.id}
+										color={effectColor}
+									/>
 								</div>
 							</div>
 						</ToggleGroupItem>
@@ -681,6 +709,8 @@ interface SettingsPanelProps {
 	selectedZoomId?: string | null;
 	selectedZoomMode?: ZoomMode | null;
 	onZoomModeChange?: (mode: ZoomMode) => void;
+	selectedZoomFollowMargins?: FollowMargins | null;
+	onZoomFollowMarginsChange?: (margins: FollowMargins) => void;
 	onZoomDelete?: (id: string) => void;
 	selectedClipId?: string | null;
 	selectedClipSpeed?: number | null;
@@ -701,6 +731,11 @@ interface SettingsPanelProps {
 	onAudioVolumeChange?: (volume: number) => void;
 	onAudioNormalizeChange?: (normalize: boolean) => void;
 	onAudioDelete?: (id: string) => void;
+	onRecordVoiceover?: () => void;
+	isRecordingVoiceover?: boolean;
+	voiceoverDeviceId?: string;
+	onVoiceoverDeviceChange?: (deviceId: string) => void;
+	voiceoverMicDevices?: Array<{ deviceId: string; label: string }>;
 	shadowIntensity?: number;
 	onShadowChange?: (intensity: number) => void;
 	backgroundBlur?: number;
@@ -803,12 +838,16 @@ interface SettingsPanelProps {
 	onAnnotationDelete?: (id: string) => void;
 	autoCaptions?: CaptionCue[];
 	autoCaptionSettings?: AutoCaptionSettings;
+	silenceDetectionSettings?: SilenceDetectionSettings;
 	whisperExecutablePath?: string | null;
 	whisperModelPath?: string | null;
 	whisperModelDownloadStatus?: "idle" | "downloading" | "downloaded" | "error";
 	whisperModelDownloadProgress?: number;
 	isGeneratingCaptions?: boolean;
 	onAutoCaptionSettingsChange?: (settings: AutoCaptionSettings) => void;
+	onSilenceDetectionSettingsChange?: (settings: SilenceDetectionSettings) => void;
+	onRemoveSilence?: () => void;
+	onResetClips?: () => void;
 	onPickWhisperExecutable?: () => void;
 	onPickWhisperModel?: () => void;
 	onGenerateAutoCaptions?: () => void;
@@ -820,6 +859,7 @@ interface SettingsPanelProps {
 }
 
 const ZOOM_DEPTH_OPTIONS: Array<{ depth: ZoomDepth; label: string }> = [
+	{ depth: 0, label: "1×" },
 	{ depth: 1, label: "1.25×" },
 	{ depth: 2, label: "1.5×" },
 	{ depth: 3, label: "1.8×" },
@@ -1136,6 +1176,8 @@ export function SettingsPanel({
 	selectedZoomId,
 	selectedZoomMode,
 	onZoomModeChange,
+	selectedZoomFollowMargins,
+	onZoomFollowMarginsChange,
 	onZoomDelete,
 	selectedClipId,
 	selectedClipSpeed,
@@ -1156,6 +1198,11 @@ export function SettingsPanel({
 	onAudioVolumeChange,
 	onAudioNormalizeChange,
 	onAudioDelete,
+	onRecordVoiceover,
+	isRecordingVoiceover = false,
+	voiceoverDeviceId,
+	onVoiceoverDeviceChange,
+	voiceoverMicDevices = [],
 	shadowIntensity = 0.67,
 	onShadowChange,
 	backgroundBlur = 0,
@@ -1240,11 +1287,15 @@ export function SettingsPanel({
 	onAnnotationDelete,
 	autoCaptions = [],
 	autoCaptionSettings = DEFAULT_AUTO_CAPTION_SETTINGS,
+	silenceDetectionSettings = DEFAULT_SILENCE_DETECTION_SETTINGS,
 	whisperModelPath,
 	whisperModelDownloadStatus = "idle",
 	whisperModelDownloadProgress = 0,
 	isGeneratingCaptions = false,
 	onAutoCaptionSettingsChange,
+	onSilenceDetectionSettingsChange,
+	onRemoveSilence,
+	onResetClips,
 	onPickWhisperModel,
 	onGenerateAutoCaptions,
 	onClearAutoCaptions,
@@ -1287,6 +1338,12 @@ export function SettingsPanel({
 	const updateAutoCaptionSettings = (partial: Partial<AutoCaptionSettings>) => {
 		onAutoCaptionSettingsChange?.({
 			...autoCaptionSettings,
+			...partial,
+		});
+	};
+	const updateSilenceDetectionSettings = (partial: Partial<SilenceDetectionSettings>) => {
+		onSilenceDetectionSettingsChange?.({
+			...silenceDetectionSettings,
 			...partial,
 		});
 	};
@@ -2827,6 +2884,89 @@ export function SettingsPanel({
 		</section>
 	);
 
+	const silenceSectionContent = (
+		<section className="flex flex-col gap-2">
+			<div className="flex items-center justify-between gap-3">
+				<div className="flex items-center gap-3">
+					<SectionLabel>Silence Removal</SectionLabel>
+					<button
+						type="button"
+						onClick={() =>
+							onSilenceDetectionSettingsChange?.(DEFAULT_SILENCE_DETECTION_SETTINGS)
+						}
+						className="text-[10px] text-[#2563EB] transition-opacity hover:opacity-80"
+					>
+						{t("common.actions.reset", "Reset")}
+					</button>
+				</div>
+			</div>
+			<div className="rounded-lg bg-foreground/[0.03] px-2.5 py-2 space-y-3">
+				<SliderControl
+					min={0}
+					max={0.1}
+					step={0.001}
+					label="Sensitivity"
+					value={silenceDetectionSettings.sensitivity}
+					defaultValue={DEFAULT_SILENCE_DETECTION_SETTINGS.sensitivity}
+					onChange={(value) => updateSilenceDetectionSettings({ sensitivity: value })}
+					formatValue={(value) => `${Math.round(value * 1000)}`}
+					parseInput={(text) => parseFloat(text) / 1000}
+				/>
+				<SliderControl
+					min={50}
+					max={2000}
+					step={50}
+					label="Min Silence (ms)"
+					value={silenceDetectionSettings.minSilenceMs}
+					defaultValue={DEFAULT_SILENCE_DETECTION_SETTINGS.minSilenceMs}
+					onChange={(value) => updateSilenceDetectionSettings({ minSilenceMs: value })}
+					formatValue={(value) => `${value}ms`}
+					parseInput={(text) => parseFloat(text.replace(/ms$/, ""))}
+				/>
+				<SliderControl
+					min={50}
+					max={2000}
+					step={50}
+					label="Min Region (ms)"
+					value={silenceDetectionSettings.minRegionMs}
+					defaultValue={DEFAULT_SILENCE_DETECTION_SETTINGS.minRegionMs}
+					onChange={(value) => updateSilenceDetectionSettings({ minRegionMs: value })}
+					formatValue={(value) => `${value}ms`}
+					parseInput={(text) => parseFloat(text.replace(/ms$/, ""))}
+				/>
+				<SliderControl
+					min={0}
+					max={500}
+					step={10}
+					label="Padding (ms)"
+					value={silenceDetectionSettings.paddingMs}
+					defaultValue={DEFAULT_SILENCE_DETECTION_SETTINGS.paddingMs}
+					onChange={(value) => updateSilenceDetectionSettings({ paddingMs: value })}
+					formatValue={(value) => `${value}ms`}
+					parseInput={(text) => parseFloat(text.replace(/ms$/, ""))}
+				/>
+				<div className="flex gap-2 pt-1">
+					<Button
+						type="button"
+						variant="outline"
+						className="flex-1 gap-2 text-xs h-8"
+						onClick={onRemoveSilence}
+					>
+						Remove Silence
+					</Button>
+					<Button
+						type="button"
+						variant="outline"
+						className="flex-1 gap-2 text-xs h-8 border-red-500/20 text-red-400 hover:bg-red-500/10"
+						onClick={onResetClips}
+					>
+						Reset Clips
+					</Button>
+				</div>
+			</div>
+		</section>
+	);
+
 	const effectSectionContent = (() => {
 		const settingsSectionContent = (
 			<div className="space-y-4">
@@ -3251,6 +3391,18 @@ export function SettingsPanel({
 								</button>
 								<button
 									type="button"
+									onClick={() => onZoomModeChange?.("follow")}
+									className={cn(
+										"flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-all",
+										selectedZoomMode === "follow"
+											? "bg-[#2563EB] text-white shadow-sm"
+											: "text-muted-foreground hover:text-foreground",
+									)}
+								>
+									{tSettings("zoom.modeFollow", "Follow")}
+								</button>
+								<button
+									type="button"
 									onClick={() => onZoomModeChange?.("manual")}
 									className={cn(
 										"flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-all",
@@ -3268,10 +3420,15 @@ export function SettingsPanel({
 											"zoom.modeManualDescription",
 											"Set a fixed focus point for this zoom",
 										)
-									: tSettings(
-											"zoom.modeAutoDescription",
-											"Camera recenters when the cursor nears the edge of the zoomed view",
-										)}
+									: selectedZoomMode === "follow"
+										? tSettings(
+												"zoom.modeFollowDescription",
+												"Camera follows cursor, never exits crop boundary",
+											)
+										: tSettings(
+												"zoom.modeAutoDescription",
+												"Camera recenters when the cursor nears the edge of the zoomed view",
+											)}
 							</p>
 						</div>
 						<div className="grid grid-cols-6 gap-1.5">
@@ -3296,6 +3453,41 @@ export function SettingsPanel({
 								);
 							})}
 						</div>
+						{selectedZoomMode === "follow" && onZoomFollowMarginsChange && (
+								<div className="flex flex-col gap-1.5 mt-1">
+									{(
+										[
+											{ key: "top", label: "Top gap" },
+											{ key: "bottom", label: "Bottom gap" },
+											{ key: "left", label: "Left gap" },
+											{ key: "right", label: "Right gap" },
+										] as const
+									).map(({ key, label }) => {
+										const margins = selectedZoomFollowMargins ?? DEFAULT_FOLLOW_MARGINS;
+										return (
+										<SliderControl
+											key={key}
+											label={tSettings(`zoom.followGap.${key}`, label)}
+											value={Math.round((margins[key] ?? 0) * 100)}
+											defaultValue={0}
+											min={0}
+											max={Math.round(MAX_FOLLOW_MARGIN * 100)}
+											step={1}
+											onChange={(v) =>
+												onZoomFollowMarginsChange({
+													...margins,
+													[key]: v / 100,
+												})
+											}
+											formatValue={(v) => `${v}%`}
+											parseInput={(text) =>
+												parseFloat(text.replace(/%$/, "")) || 0
+											}
+										/>
+										);
+									})}
+								</div>
+							)}
 						<div className="h-px bg-foreground/[0.06] my-1" />
 					</>
 				)}
@@ -3359,40 +3551,85 @@ export function SettingsPanel({
 
 		const audioSectionContent = (
 			<section className="flex flex-col gap-3">
-				<div className="flex items-center justify-between gap-3">
-					<SectionLabel>{tSettings("audio.volumeTitle", "Audio")}</SectionLabel>
-					<button
-						type="button"
-						onClick={() => {
-							onAudioVolumeChange?.(1);
-							onAudioNormalizeChange?.(false);
-						}}
-						className="text-[10px] text-[#2563EB] transition-opacity hover:opacity-80"
-					>
-						{t("common.actions.reset", "Reset")}
-					</button>
-				</div>
-				<SliderControl
-					label={tSettings("audio.volume", "Volume")}
-					value={selectedAudioVolume ?? 1}
-					defaultValue={1}
-					min={0}
-					max={1}
-					step={0.01}
-					onChange={(v) => onAudioVolumeChange?.(v)}
-					formatValue={(v) => `${Math.round(v * 100)}%`}
-					parseInput={(text) => parseFloat(text.replace(/%$/, "")) / 100}
-				/>
-				<div className="flex items-center justify-between rounded-lg bg-foreground/[0.03] px-2.5 py-1.5">
-					<span className="text-[10px] text-muted-foreground">
-						{tSettings("audio.normalize", "Normalize")}
-					</span>
-					<Switch
-						checked={Boolean(selectedAudioNormalize)}
-						onCheckedChange={(v) => onAudioNormalizeChange?.(v)}
-						className="data-[state=checked]:bg-[#2563EB] scale-75"
-					/>
-				</div>
+				{selectedAudioId ? (
+					<>
+						<div className="flex items-center justify-between gap-3">
+							<SectionLabel>{tSettings("audio.volumeTitle", "Audio")}</SectionLabel>
+							<button
+								type="button"
+								onClick={() => {
+									onAudioVolumeChange?.(1);
+									onAudioNormalizeChange?.(false);
+								}}
+								className="text-[10px] text-[#2563EB] transition-opacity hover:opacity-80"
+							>
+								{t("common.actions.reset", "Reset")}
+							</button>
+						</div>
+						<SliderControl
+							label={tSettings("audio.volume", "Volume")}
+							value={selectedAudioVolume ?? 1}
+							defaultValue={1}
+							min={0}
+							max={1}
+							step={0.01}
+							onChange={(v) => onAudioVolumeChange?.(v)}
+							formatValue={(v) => `${Math.round(v * 100)}%`}
+							parseInput={(text) => parseFloat(text.replace(/%$/, "")) / 100}
+						/>
+						<div className="flex items-center justify-between rounded-lg bg-foreground/[0.03] px-2.5 py-1.5">
+							<span className="text-[10px] text-muted-foreground">
+								{tSettings("audio.normalize", "Normalize")}
+							</span>
+							<Switch
+								checked={Boolean(selectedAudioNormalize)}
+								onCheckedChange={(v) => onAudioNormalizeChange?.(v)}
+								className="data-[state=checked]:bg-[#2563EB] scale-75"
+							/>
+						</div>
+					</>
+				) : (
+					<SectionLabel>{tSettings("audio.voiceoverTitle", "Voiceover")}</SectionLabel>
+				)}
+				{voiceoverMicDevices.length > 0 && (
+					<div className="flex items-center justify-between rounded-lg bg-foreground/[0.03] px-2.5 py-1.5">
+						<span className="text-[10px] text-muted-foreground">
+							{tSettings("audio.microphone", "Microphone")}
+						</span>
+						<Select
+							value={
+								voiceoverDeviceId ?? voiceoverMicDevices[0]?.deviceId ?? "default"
+							}
+							onValueChange={(id) => onVoiceoverDeviceChange?.(id)}
+						>
+							<SelectTrigger className="h-7 w-[140px] text-xs [&>span]:truncate">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent className="bg-editor-surface-alt border-foreground/10 text-xs">
+								{voiceoverMicDevices.map((device) => (
+									<SelectItem
+										key={device.deviceId}
+										value={device.deviceId}
+										className="text-xs"
+									>
+										{device.label}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+					</div>
+				)}
+				<Button
+					variant={isRecordingVoiceover ? "destructive" : "secondary"}
+					size="sm"
+					className="h-8 w-full gap-2 text-xs"
+					onClick={onRecordVoiceover}
+				>
+					<Microphone className="h-3.5 w-3.5" />
+					{isRecordingVoiceover
+						? tSettings("audio.stopVoiceover", "Stop Recording")
+						: tSettings("audio.recordVoiceover", "Record Voiceover")}
+				</Button>
 			</section>
 		);
 
@@ -3567,6 +3804,8 @@ export function SettingsPanel({
 				return sceneSectionContent;
 			case "captions":
 				return captionsSectionContent;
+			case "silence":
+				return silenceSectionContent;
 			case "cursor":
 				return (
 					<section className="flex flex-col gap-2">
@@ -3695,12 +3934,15 @@ export function SettingsPanel({
 										<div className="flex flex-wrap gap-1.5">
 											{CLICK_EFFECT_COLOR_OPTIONS.map((color) => {
 												const isSelected =
-													cursorClickEffectColor.toLowerCase() === color.toLowerCase();
+													cursorClickEffectColor.toLowerCase() ===
+													color.toLowerCase();
 												return (
 													<button
 														key={color}
 														type="button"
-														onClick={() => onCursorClickEffectColorChange?.(color)}
+														onClick={() =>
+															onCursorClickEffectColorChange?.(color)
+														}
 														className={cn(
 															"h-6 w-6 rounded-[8px] border transition-transform hover:scale-[1.04]",
 															isSelected
@@ -3714,7 +3956,9 @@ export function SettingsPanel({
 											})}
 											<button
 												type="button"
-												onClick={() => cursorClickEffectColorInputRef.current?.click()}
+												onClick={() =>
+													cursorClickEffectColorInputRef.current?.click()
+												}
 												className="relative h-6 w-10 overflow-hidden rounded-[8px] border border-foreground/10 text-[8px] font-semibold uppercase tracking-[0.18em] text-foreground"
 												style={{
 													background: `linear-gradient(135deg, ${cursorClickEffectColor} 0%, ${cursorClickEffectColor} 58%, rgba(255,255,255,0.92) 58%, rgba(255,255,255,0.92) 100%)`,

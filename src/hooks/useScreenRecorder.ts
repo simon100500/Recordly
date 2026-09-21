@@ -16,11 +16,11 @@ const FOUR_K_PIXELS = TARGET_WIDTH * TARGET_HEIGHT;
 const QHD_WIDTH = 2560;
 const QHD_HEIGHT = 1440;
 const QHD_PIXELS = QHD_WIDTH * QHD_HEIGHT;
-const BITRATE_4K = 45_000_000;
-const BITRATE_QHD = 28_000_000;
-const BITRATE_BASE = 18_000_000;
+const BITRATE_4K = 100_000_000;
+const BITRATE_QHD = 60_000_000;
+const BITRATE_BASE = 30_000_000;
 const HIGH_FRAME_RATE_THRESHOLD = 60;
-const HIGH_FRAME_RATE_BOOST = 1.7;
+const HIGH_FRAME_RATE_BOOST = 2.0;
 const DEFAULT_WIDTH = 1920;
 const DEFAULT_HEIGHT = 1080;
 const CODEC_ALIGNMENT = 2;
@@ -29,10 +29,10 @@ const BITS_PER_MEGABIT = 1_000_000;
 const MIN_FRAME_RATE = 30;
 const CHROME_MEDIA_SOURCE = "desktop";
 const RECORDING_FILE_PREFIX = "recording-";
-const AUDIO_BITRATE_VOICE = 128_000;
-const AUDIO_BITRATE_SYSTEM = 192_000;
+const AUDIO_BITRATE_VOICE = 256_000;
+const AUDIO_BITRATE_SYSTEM = 320_000;
 const MIC_GAIN_BOOST = 1.4;
-const WEBCAM_BITRATE = 8_000_000;
+const WEBCAM_BITRATE = 16_000_000;
 const WEBCAM_WIDTH = 1280;
 const WEBCAM_HEIGHT = 720;
 const WEBCAM_FRAME_RATE = 30;
@@ -44,6 +44,7 @@ export type BrowserMicrophoneProfile =
 	| "no-agc"
 	| "no-echo"
 	| "no-noise-suppression"
+	| "voiceover"
 	| "raw";
 type BrowserCaptureCursorMode = "always" | "never";
 export type BrowserCaptureCursorPolicy = {
@@ -51,12 +52,13 @@ export type BrowserCaptureCursorPolicy = {
 	hideOsCursorBeforeRecording: boolean;
 	hideEditorOverlayCursorByDefault: boolean;
 };
-const DEFAULT_BROWSER_MICROPHONE_PROFILE: BrowserMicrophoneProfile = "processed";
+const DEFAULT_BROWSER_MICROPHONE_PROFILE: BrowserMicrophoneProfile = "voiceover";
 const BROWSER_MICROPHONE_PROFILES = new Set<BrowserMicrophoneProfile>([
 	"processed",
 	"no-agc",
 	"no-echo",
 	"no-noise-suppression",
+	"voiceover",
 	"raw",
 ]);
 type MicrophoneTrackSettingsSnapshot = Partial<
@@ -224,13 +226,32 @@ export function createProcessedMicrophoneConstraints(
 	profile: BrowserMicrophoneProfile = DEFAULT_BROWSER_MICROPHONE_PROFILE,
 ): MediaStreamConstraints {
 	const normalizedProfile = normalizeBrowserMicrophoneProfile(profile);
+
+	if (normalizedProfile === "voiceover") {
+		const audio: MediaTrackConstraints = {
+			echoCancellation: true,
+			noiseSuppression: false,
+			autoGainControl: false,
+			channelCount: { ideal: 2 },
+			sampleRate: { ideal: 48000 },
+			sampleSize: { ideal: 24 },
+		};
+
+		if (microphoneDeviceId) {
+			audio.deviceId = { exact: microphoneDeviceId };
+		}
+
+		return { audio, video: false };
+	}
+
 	const audio: MediaTrackConstraints = {
 		echoCancellation: normalizedProfile !== "no-echo" && normalizedProfile !== "raw",
 		noiseSuppression:
 			normalizedProfile !== "no-noise-suppression" && normalizedProfile !== "raw",
 		autoGainControl: normalizedProfile !== "no-agc" && normalizedProfile !== "raw",
-		channelCount: { ideal: 1 },
+		channelCount: { ideal: 2 },
 		sampleRate: { ideal: 48000 },
+		sampleSize: { ideal: 24 },
 	};
 
 	if (microphoneDeviceId) {

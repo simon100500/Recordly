@@ -37,6 +37,7 @@ import {
 	type AnnotationRegion,
 	type AutoCaptionSettings,
 	type CaptionCue,
+	type ClipRegion,
 	type CursorClickEffectStyle,
 	type CursorStyle,
 	type Padding,
@@ -157,8 +158,10 @@ import {
 	DEFAULT_ZOOM_MOTION_BLUR_TUNING,
 	DEFAULT_ZOOM_OUT_DURATION_MS,
 	DEFAULT_ZOOM_OUT_EASING,
+	getClipSourceEndMs,
 	getDefaultCaptionFontFamily,
 } from "./types";
+import { stepCropPanFollow } from "./videoPlayback/cropPanFollow";
 import {
 	type CursorFollowCameraState,
 	computeCursorFollowFocus,
@@ -166,16 +169,15 @@ import {
 	resetCursorFollowCamera,
 	SNAP_TO_EDGES_RATIO_AUTO,
 } from "./videoPlayback/cursorFollowCamera";
+import { interpolateCursorPosition } from "./videoPlayback/cursorRenderer";
 import { clampFocusToStage as clampFocusToStageUtil } from "./videoPlayback/focusUtils";
-import {
-	layoutVideoContent as layoutVideoContentUtil,
-} from "./videoPlayback/layoutUtils";
+import { layoutVideoContent as layoutVideoContentUtil } from "./videoPlayback/layoutUtils";
 import { updateOverlayIndicator } from "./videoPlayback/overlayUtils";
-import { createVideoEventHandlers } from "./videoPlayback/videoEventHandlers";
 import {
-	getWebcamMediaTargetTimeSeconds,
-	shouldSeekWebcamMedia,
-} from "./videoPlayback/webcamSync";
+	createVideoEventHandlers,
+	type PlaybackTimelineSegment,
+} from "./videoPlayback/videoEventHandlers";
+import { getWebcamMediaTargetTimeSeconds, shouldSeekWebcamMedia } from "./videoPlayback/webcamSync";
 import { findDominantRegion } from "./videoPlayback/zoomRegionUtils";
 import {
 	applyZoomTransform,
@@ -376,8 +378,10 @@ interface VideoPlaybackProps {
 	cropRegion?: import("./types").CropRegion;
 	webcam?: WebcamOverlaySettings;
 	webcamVideoPath?: string | null;
+	clipRegions?: ClipRegion[];
 	trimRegions?: TrimRegion[];
 	speedRegions?: SpeedRegion[];
+	timelineTime?: number;
 	aspectRatio: AspectRatio;
 	annotationRegions?: AnnotationRegion[];
 	autoCaptions?: CaptionCue[];
@@ -460,8 +464,10 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			cropRegion,
 			webcam,
 			webcamVideoPath,
+			clipRegions = [],
 			trimRegions = [],
 			speedRegions = [],
+			timelineTime = currentTime,
 			aspectRatio,
 			annotationRegions = [],
 			autoCaptions = [],
@@ -588,9 +594,14 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				width: number;
 				height: number;
 			};
+			cursorViewportOffset?: { x: number; y: number };
 		}>({ x: 0, y: 0, width: 0, height: 0 });
 		const cropBoundsRef = useRef({ startX: 0, endX: 0, startY: 0, endY: 0 });
+		const cropRegionRef = useRef<import("./types").CropRegion | undefined>(cropRegion);
 		const maskGraphicsRef = useRef<Graphics | null>(null);
+		const maskContainerRef = useRef<Container | null>(null);
+		const cropPanOffsetRef = useRef({ x: 0, y: 0 });
+		const cropPanFocusRef = useRef({ cx: 0.5, cy: 0.5 });
 		const frameSpriteRef = useRef<Sprite | null>(null);
 		const frameContainerRef = useRef<Container | null>(null);
 		const frameIdRef = useRef<string | null>(frame);
@@ -606,6 +617,8 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		const layoutVideoContentRef = useRef<(() => void) | null>(null);
 		const trimRegionsRef = useRef<TrimRegion[]>([]);
 		const speedRegionsRef = useRef<SpeedRegion[]>([]);
+		const timelineSegmentsRef = useRef<PlaybackTimelineSegment[]>([]);
+		const timelineTimeRef = useRef(0);
 		const lastWebcamSyncTimeRef = useRef<number | null>(null);
 		const lastBackgroundSyncTimeRef = useRef<number | null>(null);
 		const bgVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -1538,6 +1551,10 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		}, [selectedZoomId]);
 
 		useEffect(() => {
+			cropRegionRef.current = cropRegion;
+		}, [cropRegion]);
+
+		useEffect(() => {
 			isPlayingRef.current = isPlaying;
 			extensionHost.emitEvent({
 				type: isPlaying ? "playback:play" : "playback:pause",
@@ -1672,6 +1689,38 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		useEffect(() => {
 			speedRegionsRef.current = speedRegions;
 		}, [speedRegions]);
+
+		const playbackTimelineSegments = useMemo<PlaybackTimelineSegment[]>(
+			() =>
+				clipRegions
+					.map((clip) => {
+						const speed =
+							Number.isFinite(clip.speed) && clip.speed > 0 ? clip.speed : 1;
+						return {
+							clipId: clip.id,
+							outputStartMs: Math.round(clip.startMs),
+							outputEndMs: Math.round(clip.endMs),
+							sourceStartMs: Math.round(clip.sourceStartMs ?? clip.startMs),
+							sourceEndMs: getClipSourceEndMs(clip),
+							speed,
+						};
+					})
+					.filter(
+						(segment) =>
+							segment.outputEndMs > segment.outputStartMs &&
+							segment.sourceEndMs > segment.sourceStartMs,
+					)
+					.sort((left, right) => left.outputStartMs - right.outputStartMs),
+			[clipRegions],
+		);
+
+		useEffect(() => {
+			timelineSegmentsRef.current = playbackTimelineSegments;
+		}, [playbackTimelineSegments]);
+
+		useEffect(() => {
+			timelineTimeRef.current = timelineTime * 1000;
+		}, [timelineTime]);
 
 		useEffect(() => {
 			const videoEffectsContainer = videoEffectsContainerRef.current;
@@ -2289,10 +2338,13 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			videoSpriteRef.current = videoSprite;
 
 			const maskGraphics = new Graphics();
+			const maskContainer = new Container();
+			maskContainer.addChild(maskGraphics);
 			videoContainer.addChild(videoSprite);
-			videoContainer.addChild(maskGraphics);
-			videoContainer.mask = maskGraphics;
+			videoContainer.addChild(maskContainer);
+			videoContainer.mask = maskContainer;
 			maskGraphicsRef.current = maskGraphics;
+			maskContainerRef.current = maskContainer;
 			if (cursorOverlayRef.current) {
 				cursorContainer.addChild(cursorOverlayRef.current.container);
 			}
@@ -2314,6 +2366,8 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 					onTimeUpdate,
 					trimRegionsRef,
 					speedRegionsRef,
+					timelineSegmentsRef,
+					timelineTimeRef,
 				});
 
 			video.addEventListener("play", handlePlay);
@@ -2429,30 +2483,100 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				const hasSelectedZoom = selectedId !== null;
 				const shouldShowUnzoomedView = hasSelectedZoom && !isPlayingRef.current;
 
+				const baseMask = baseMaskRef.current;
+				let overlayViewport = baseMask;
+
 				if (region && strength > 0 && !shouldShowUnzoomedView) {
 					const zoomScale = blendedScale ?? ZOOM_DEPTH_SCALES[region.depth];
 
-					// Cursor follow: use cursor-follow camera for non-manual zoom regions
 					let regionFocus = region.focus;
+					let cropPanApplied = false;
+
 					if (
 						!zoomClassicModeRef.current &&
 						region.mode !== "manual" &&
 						cursorTelemetryRef.current.length > 0
 					) {
-						regionFocus = computeCursorFollowFocus(
-							cursorFollowCameraRef.current,
-							cursorTelemetryRef.current,
-							currentTimeRef.current,
-							zoomScale,
-							strength,
-							region.focus,
-							{ snapToEdgesRatio: SNAP_TO_EDGES_RATIO_AUTO },
-						);
+						if (region.mode === "follow") {
+							const crop = cropRegionRef.current ?? {
+								x: 0,
+								y: 0,
+								width: 1,
+								height: 1,
+							};
+							const cursorPos = interpolateCursorPosition(
+								cursorTelemetryRef.current,
+								currentTimeRef.current,
+							);
+							if (
+								cursorPos &&
+								crop.width > 0 &&
+								crop.height > 0 &&
+								baseMask.width > 0 &&
+								baseMask.height > 0
+							) {
+							const step = stepCropPanFollow({
+								cursor: cursorPos,
+								crop,
+								prevOffset: cropPanOffsetRef.current,
+								prevFocus: cropPanFocusRef.current,
+								strength,
+								zoomScale,
+								margins: region.followMargins,
+							});
+							if (step) {
+								cropPanOffsetRef.current = step.offset;
+								cropPanFocusRef.current = step.focus;
+									const fullVDW = baseMask.width / crop.width;
+									const fullVDH = baseMask.height / crop.height;
+									const sprite = videoSpriteRef.current;
+									if (sprite) {
+										sprite.position.set(
+											baseOffsetRef.current.x - step.fade.x * fullVDW,
+											baseOffsetRef.current.y - step.fade.y * fullVDH,
+										);
+									}
+									overlayViewport = {
+										...baseMask,
+										sourceCrop: step.effectiveCrop,
+										cursorViewportOffset: step.cursorViewportOffset,
+									};
+									regionFocus = step.focus;
+									cropPanApplied = true;
+								}
+							}
+						} else {
+							regionFocus = computeCursorFollowFocus(
+								cursorFollowCameraRef.current,
+								cursorTelemetryRef.current,
+								currentTimeRef.current,
+								zoomScale,
+								strength,
+								region.focus,
+								{ snapToEdgesRatio: SNAP_TO_EDGES_RATIO_AUTO },
+							);
+						}
 					}
 
-					targetScaleFactor = zoomScale;
+					if (!cropPanApplied) {
+						const sprite = videoSpriteRef.current;
+						if (sprite) {
+							sprite.position.set(baseOffsetRef.current.x, baseOffsetRef.current.y);
+						}
+					cropPanOffsetRef.current = { x: 0, y: 0 };
+					cropPanFocusRef.current = { cx: 0.5, cy: 0.5 };
+				}
+
+				targetScaleFactor = zoomScale;
 					targetFocus = regionFocus;
 					targetProgress = strength;
+				} else {
+					const sprite = videoSpriteRef.current;
+					if (sprite) {
+						sprite.position.set(baseOffsetRef.current.x, baseOffsetRef.current.y);
+					}
+					cropPanOffsetRef.current = { x: 0, y: 0 };
+					cropPanFocusRef.current = { cx: 0.5, cy: 0.5 };
 				}
 
 				const state = animationStateRef.current;
@@ -2547,7 +2671,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 					cursorOverlay.update(
 						telemetry,
 						timeMs,
-						baseMaskRef.current,
+						overlayViewport,
 						showCursorRef.current,
 						!isPlayingRef.current || isSeekingRef.current,
 					);
@@ -2555,7 +2679,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 					smoothedCursorForHooks = mapSmoothedCursorToCanvasNormalized(
 						cursorOverlay.getSmoothedCursorSnapshot(),
 						{
-							maskRect: baseMaskRef.current,
+							maskRect: overlayViewport,
 							canvasWidth: extensionCanvasWidth,
 							canvasHeight: extensionCanvasHeight,
 						},
@@ -2589,7 +2713,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 										interactionType: p.interactionType,
 									},
 									{
-										maskRect: baseMaskRef.current,
+										maskRect: overlayViewport,
 										canvasWidth: extensionCanvasWidth,
 										canvasHeight: extensionCanvasHeight,
 									},
@@ -3116,14 +3240,14 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 								</div>
 							</div>
 						) : null}
-								{activeCaptionLayout && autoCaptionSettings ? (
-									<div
-										className="absolute inset-x-0 flex justify-center"
-										style={{
-											bottom: `${autoCaptionSettings.bottomOffset}%`,
-											pointerEvents: onEditAutoCaption ? "auto" : "none",
-										}}
-									>
+						{activeCaptionLayout && autoCaptionSettings ? (
+							<div
+								className="absolute inset-x-0 flex justify-center"
+								style={{
+									bottom: `${autoCaptionSettings.bottomOffset}%`,
+									pointerEvents: onEditAutoCaption ? "auto" : "none",
+								}}
+							>
 								<div
 									style={{
 										maxWidth: `${autoCaptionSettings.maxWidth}%`,
@@ -3135,32 +3259,38 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 								>
 									<div
 										ref={captionBoxRef}
-												role={
-													onEditAutoCaption && !isCaptionEditing ? "button" : undefined
-												}
-												tabIndex={onEditAutoCaption && !isCaptionEditing ? 0 : undefined}
-												aria-label={
-													onEditAutoCaption && !isCaptionEditing ? "Edit current caption" : undefined
-												}
-												onClick={(event) => {
-													event.stopPropagation();
-													if (!isCaptionEditing) {
-														beginCaptionEdit();
-													}
-												}}
-												onPointerDown={(event) => {
-													event.stopPropagation();
-												}}
-												onKeyDown={(event) => {
-													if (!onEditAutoCaption || isCaptionEditing) {
-														return;
-													}
+										role={
+											onEditAutoCaption && !isCaptionEditing
+												? "button"
+												: undefined
+										}
+										tabIndex={
+											onEditAutoCaption && !isCaptionEditing ? 0 : undefined
+										}
+										aria-label={
+											onEditAutoCaption && !isCaptionEditing
+												? "Edit current caption"
+												: undefined
+										}
+										onClick={(event) => {
+											event.stopPropagation();
+											if (!isCaptionEditing) {
+												beginCaptionEdit();
+											}
+										}}
+										onPointerDown={(event) => {
+											event.stopPropagation();
+										}}
+										onKeyDown={(event) => {
+											if (!onEditAutoCaption || isCaptionEditing) {
+												return;
+											}
 
-													if (event.key === "Enter" || event.key === " ") {
-														event.preventDefault();
-														beginCaptionEdit();
-													}
-												}}
+											if (event.key === "Enter" || event.key === " ") {
+												event.preventDefault();
+												beginCaptionEdit();
+											}
+										}}
 										style={{
 											backgroundColor: `rgba(0, 0, 0, ${autoCaptionSettings.backgroundOpacity})`,
 											fontFamily: getDefaultCaptionFontFamily(),
@@ -3198,122 +3328,138 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 												),
 											)}px`,
 											boxSizing: "border-box",
-													cursor:
-														onEditAutoCaption && !isCaptionEditing ? "text" : undefined,
-													pointerEvents: onEditAutoCaption ? "auto" : undefined,
+											cursor:
+												onEditAutoCaption && !isCaptionEditing
+													? "text"
+													: undefined,
+											pointerEvents: onEditAutoCaption ? "auto" : undefined,
 										}}
 									>
-												{captionEditSession ? (
-													<textarea
-														ref={captionEditInputRef}
-														value={captionEditSession.draft}
-														onChange={(event) => {
-															const draft = event.target.value;
-															setCaptionEditSession((session) => {
-																const nextSession = session ? { ...session, draft } : session;
-																captionEditSessionRef.current = nextSession;
-																return nextSession;
-															});
-														}}
-														onBlur={commitCaptionEdit}
-														onClick={(event) => event.stopPropagation()}
-														onKeyDown={(event) => {
-															if (event.key === "Escape") {
-																event.preventDefault();
-																cancelCaptionEdit();
-																return;
-															}
-
-															if (event.key === "Enter" && !event.shiftKey) {
-																event.preventDefault();
-																event.currentTarget.blur();
-															}
-														}}
-														rows={Math.max(1, activeCaptionLayout.visibleLines.length)}
-														aria-label="Edit current caption"
-														style={{
-															display: "block",
-															width: `${
-																captionEditTextMetrics?.widthPx ??
-																Math.max(
-																	48,
-																	activeCaptionLayout.visibleLines.reduce(
-																		(width, line) => Math.max(width, line.width),
-																		0,
-																	),
-																)
-															}px`,
-															maxWidth: `${
-																captionEditTextMetrics?.maxTextWidthPx ??
-																getCaptionTextMaxWidth(
-																	overlayRef.current?.clientWidth || 960,
-																	autoCaptionSettings.maxWidth,
-																	getCaptionScaledFontSize(
-																		autoCaptionSettings.fontSize,
-																		overlayRef.current?.clientWidth || 960,
-																		autoCaptionSettings.maxWidth,
-																	),
-																)
-															}px`,
-															minHeight: `${
-																Math.max(1, activeCaptionLayout.visibleLines.length) *
-																(captionEditTextMetrics?.fontSize ??
-																	getCaptionScaledFontSize(
-																		autoCaptionSettings.fontSize,
-																		overlayRef.current?.clientWidth || 960,
-																		autoCaptionSettings.maxWidth,
-																	)) *
-																CAPTION_LINE_HEIGHT
-															}px`,
-															resize: "none",
-															border: "0",
-															outline: "0",
-															padding: "0",
-															margin: "0",
-															overflow: "hidden",
-															background: "transparent",
-															color: autoCaptionSettings.textColor,
-															font: "inherit",
-															lineHeight: "inherit",
-															textAlign: "center",
-														}}
-													/>
-												) : (
-													activeCaptionLayout.visibleLines.map((line) => (
-											<div
-												key={`${activeCaptionLayout.blockKey}-${line.startWordIndex}`}
-												style={{
-													display: "flex",
-													justifyContent: "center",
-													flexWrap: "nowrap",
-													whiteSpace: "nowrap",
+										{captionEditSession ? (
+											<textarea
+												ref={captionEditInputRef}
+												value={captionEditSession.draft}
+												onChange={(event) => {
+													const draft = event.target.value;
+													setCaptionEditSession((session) => {
+														const nextSession = session
+															? { ...session, draft }
+															: session;
+														captionEditSessionRef.current = nextSession;
+														return nextSession;
+													});
 												}}
-											>
-												{line.words.map((word) => {
-													const visualState = getCaptionWordVisualState(
-														activeCaptionLayout.hasWordTimings,
-														word.state,
-													);
+												onBlur={commitCaptionEdit}
+												onClick={(event) => event.stopPropagation()}
+												onKeyDown={(event) => {
+													if (event.key === "Escape") {
+														event.preventDefault();
+														cancelCaptionEdit();
+														return;
+													}
 
-													return (
-														<span
-															key={`${activeCaptionLayout.blockKey}-${word.index}`}
-															style={{
-																display: "inline-block",
-																whiteSpace: "pre",
-																color: visualState.isInactive
-																	? autoCaptionSettings.inactiveTextColor
-																	: autoCaptionSettings.textColor,
-																opacity: visualState.opacity,
-															}}
-														>
-															{`${word.leadingSpace ? " " : ""}${word.text}`}
-														</span>
-													);
-												})}
-											</div>
-													))
+													if (event.key === "Enter" && !event.shiftKey) {
+														event.preventDefault();
+														event.currentTarget.blur();
+													}
+												}}
+												rows={Math.max(
+													1,
+													activeCaptionLayout.visibleLines.length,
 												)}
+												aria-label="Edit current caption"
+												style={{
+													display: "block",
+													width: `${
+														captionEditTextMetrics?.widthPx ??
+														Math.max(
+															48,
+															activeCaptionLayout.visibleLines.reduce(
+																(width, line) =>
+																	Math.max(width, line.width),
+																0,
+															),
+														)
+													}px`,
+													maxWidth: `${
+														captionEditTextMetrics?.maxTextWidthPx ??
+														getCaptionTextMaxWidth(
+															overlayRef.current?.clientWidth || 960,
+															autoCaptionSettings.maxWidth,
+															getCaptionScaledFontSize(
+																autoCaptionSettings.fontSize,
+																overlayRef.current?.clientWidth ||
+																	960,
+																autoCaptionSettings.maxWidth,
+															),
+														)
+													}px`,
+													minHeight: `${
+														Math.max(
+															1,
+															activeCaptionLayout.visibleLines.length,
+														) *
+														(
+															captionEditTextMetrics?.fontSize ??
+																getCaptionScaledFontSize(
+																	autoCaptionSettings.fontSize,
+																	overlayRef.current
+																		?.clientWidth || 960,
+																	autoCaptionSettings.maxWidth,
+																)
+														) *
+														CAPTION_LINE_HEIGHT
+													}px`,
+													resize: "none",
+													border: "0",
+													outline: "0",
+													padding: "0",
+													margin: "0",
+													overflow: "hidden",
+													background: "transparent",
+													color: autoCaptionSettings.textColor,
+													font: "inherit",
+													lineHeight: "inherit",
+													textAlign: "center",
+												}}
+											/>
+										) : (
+											activeCaptionLayout.visibleLines.map((line) => (
+												<div
+													key={`${activeCaptionLayout.blockKey}-${line.startWordIndex}`}
+													style={{
+														display: "flex",
+														justifyContent: "center",
+														flexWrap: "nowrap",
+														whiteSpace: "nowrap",
+													}}
+												>
+													{line.words.map((word) => {
+														const visualState =
+															getCaptionWordVisualState(
+																activeCaptionLayout.hasWordTimings,
+																word.state,
+															);
+
+														return (
+															<span
+																key={`${activeCaptionLayout.blockKey}-${word.index}`}
+																style={{
+																	display: "inline-block",
+																	whiteSpace: "pre",
+																	color: visualState.isInactive
+																		? autoCaptionSettings.inactiveTextColor
+																		: autoCaptionSettings.textColor,
+																	opacity: visualState.opacity,
+																}}
+															>
+																{`${word.leadingSpace ? " " : ""}${word.text}`}
+															</span>
+														);
+													})}
+												</div>
+											))
+										)}
 									</div>
 								</div>
 							</div>
@@ -3334,32 +3480,44 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 									top: annotationRecordingRect.y || 0,
 									width:
 										annotationRecordingRect.width ||
-										(overlayRef.current?.clientWidth || 800),
+										overlayRef.current?.clientWidth ||
+										800,
 									height:
 										annotationRecordingRect.height ||
-										(overlayRef.current?.clientHeight || 600),
+										overlayRef.current?.clientHeight ||
+										600,
 								}}
 							>
 								{(() => {
-									const filtered = (annotationRegions || []).filter((annotation) => {
-										if (
-											typeof annotation.startMs !== "number" ||
-											typeof annotation.endMs !== "number"
-										)
-											return false;
+									const filtered = (annotationRegions || []).filter(
+										(annotation) => {
+											if (
+												typeof annotation.startMs !== "number" ||
+												typeof annotation.endMs !== "number"
+											)
+												return false;
 
-										if (annotation.id === selectedAnnotationId) return true;
+											if (annotation.id === selectedAnnotationId) return true;
 
-										const timeMs = Math.round(currentTime * 1000);
-										return timeMs >= annotation.startMs && timeMs <= annotation.endMs;
-									});
+											const timeMs = Math.round(currentTime * 1000);
+											return (
+												timeMs >= annotation.startMs &&
+												timeMs <= annotation.endMs
+											);
+										},
+									);
 
-									const sorted = [...filtered].sort((a, b) => a.zIndex - b.zIndex);
+									const sorted = [...filtered].sort(
+										(a, b) => a.zIndex - b.zIndex,
+									);
 
 									const handleAnnotationClick = (clickedId: string) => {
 										if (!onSelectAnnotation) return;
 
-										if (clickedId === selectedAnnotationId && sorted.length > 1) {
+										if (
+											clickedId === selectedAnnotationId &&
+											sorted.length > 1
+										) {
 											const currentIndex = sorted.findIndex(
 												(a) => a.id === clickedId,
 											);
@@ -3377,21 +3535,25 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 											isSelected={annotation.id === selectedAnnotationId}
 											containerWidth={
 												annotationRecordingRect.width ||
-												(overlayRef.current?.clientWidth || 800)
+												overlayRef.current?.clientWidth ||
+												800
 											}
 											containerHeight={
 												annotationRecordingRect.height ||
-												(overlayRef.current?.clientHeight || 600)
+												overlayRef.current?.clientHeight ||
+												600
 											}
 											recordingRect={{
 												x: 0,
 												y: 0,
 												width:
 													annotationRecordingRect.width ||
-													(overlayRef.current?.clientWidth || 800),
+													overlayRef.current?.clientWidth ||
+													800,
 												height:
 													annotationRecordingRect.height ||
-													(overlayRef.current?.clientHeight || 600),
+													overlayRef.current?.clientHeight ||
+													600,
 											}}
 											sceneTransform={{ scale: 1, x: 0, y: 0 }}
 											interactionScale={annotationSceneTransform.scale}

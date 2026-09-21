@@ -176,9 +176,9 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 		self.videoInput = videoInput
 
 		// Add inline audio track directly to the video so the .mp4 always contains audio.
-		// This eliminates the dependency on the post-recording ffmpeg mux step.
-		if capturesSystemAudio || capturesMicrophone {
-			let inlineAudio = AVAssetWriterInput(mediaType: .audio, outputSettings: Self.audioOutputSettings(bitRate: 192_000))
+			// This eliminates the dependency on the post-recording ffmpeg mux step.
+			if capturesSystemAudio || capturesMicrophone {
+				let inlineAudio = AVAssetWriterInput(mediaType: .audio, outputSettings: Self.audioOutputSettings(bitRate: 320_000))
 			inlineAudio.expectsMediaDataInRealTime = true
 			if assetWriter.canAdd(inlineAudio) {
 				assetWriter.add(inlineAudio)
@@ -193,7 +193,7 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 
 			let systemAudioURL = URL(fileURLWithPath: systemAudioOutputPath)
 			let systemAudioWriter = try AVAssetWriter(url: systemAudioURL, fileType: .m4a)
-			let systemAudioInput = AVAssetWriterInput(mediaType: .audio, outputSettings: Self.audioOutputSettings(bitRate: 160_000))
+			let systemAudioInput = AVAssetWriterInput(mediaType: .audio, outputSettings: Self.audioOutputSettings(bitRate: 320_000))
 			systemAudioInput.expectsMediaDataInRealTime = true
 
 			guard systemAudioWriter.canAdd(systemAudioInput) else {
@@ -219,7 +219,7 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 			let microphoneURL = URL(fileURLWithPath: microphoneOutputPath)
 			microphoneOutputURL = microphoneURL
 			let microphoneWriter = try AVAssetWriter(url: microphoneURL, fileType: .m4a)
-			let microphoneInput = AVAssetWriterInput(mediaType: .audio, outputSettings: Self.audioOutputSettings(bitRate: 128_000))
+			let microphoneInput = AVAssetWriterInput(mediaType: .audio, outputSettings: Self.audioOutputSettings(bitRate: 256_000))
 			microphoneInput.expectsMediaDataInRealTime = true
 
 			guard microphoneWriter.canAdd(microphoneInput) else {

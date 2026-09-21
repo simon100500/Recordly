@@ -51,14 +51,14 @@ export function buildTimelineItems(params: {
 	const clips: TimelineRenderItem[] = clipRegions.map((region, index) => {
 		const displayDurationMs = Math.max(0, region.endMs - region.startMs);
 		const speed = Number.isFinite(region.speed) && region.speed > 0 ? region.speed : 1;
-		const sourceEndMs = region.startMs + displayDurationMs * speed;
+		const sourceEndMs = (region.sourceStartMs ?? region.startMs) + displayDurationMs * speed;
 		const speedLabel = formatClipSpeedLabel(speed);
 
 		return {
 			id: region.id,
 			rowId: CLIP_ROW_ID,
 			span: { start: region.startMs, end: region.endMs },
-			sourceSpan: { start: region.startMs, end: sourceEndMs },
+			sourceSpan: { start: region.sourceStartMs ?? region.startMs, end: sourceEndMs },
 			label: speedLabel ? `Clip ${index + 1} ${speedLabel}` : `Clip ${index + 1}`,
 			speedValue: speedLabel ? speed : undefined,
 			showSourceAudio: region.showSourceAudio,
@@ -95,6 +95,7 @@ export function buildAllRegionSpans(params: {
 	audioRegions: AudioRegion[];
 }): TimelineRegionSpan[] {
 	const { zoomRegions, clipRegions, audioRegions } = params;
+
 	const zooms = zoomRegions.map((r) => ({
 		id: r.id,
 		start: r.startMs,

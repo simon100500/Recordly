@@ -292,6 +292,10 @@ interface Window {
 			videoData: ArrayBuffer,
 			fileName: string,
 		) => Promise<{ success: boolean; path?: string; message?: string }>;
+		storeVoiceoverAudio: (
+			audioData: ArrayBuffer,
+			fileName: string,
+		) => Promise<{ success: boolean; path?: string; error?: string }>;
 		storeMicrophoneSidecar: (
 			audioData: ArrayBuffer,
 			videoPath: string,
@@ -698,6 +702,8 @@ interface Window {
 			whisperExecutablePath?: string;
 			whisperModelPath: string;
 			language?: string;
+			externalAudioPath?: string | null;
+			externalAudioStartMs?: number;
 		}) => Promise<{
 			success: boolean;
 			cues?: AutoCaptionCue[];
